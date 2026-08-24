@@ -8,16 +8,16 @@ ExpenseIQ Backend API — A production-quality, modular, and lightweight persona
 
 ExpenseIQ is an intelligent expense management platform engineered for seamless multi-client support (Web & Mobile). The backend provides a secure, ownership-driven architecture for tracking personal cash flows, category-wise budgets, analytics, and future AI-driven spending recommendations.
 
-### Current Features (Initial Setup)
+### Current Features
 * **API Health & DB Monitoring**: Endpoints to check server lifecycle and PostgreSQL database connectivity.
 * **User Registration**: Secure registration with Zod validation, duplicate email prevention, and bcrypt password hashing (10 salt rounds).
 * **User Authentication & Login**: Safe credential verification returning JWT access tokens with structured user payloads.
 * **Protected Routes & Current User Profile**: JWT authentication middleware extracting token claims and serving `/api/auth/me`.
+* **User-Created Custom Categories**: Full CRUD endpoints (`POST`, `GET`, `GET /:id`, `PATCH`, `DELETE`) with type filtering (`EXPENSE` & `INCOME`), compound uniqueness per user, and strict multi-tenant ownership isolation.
 * **Zero Password Leakage**: Passwords and sensitive internal details are stripped at the database/service layer.
 * **Strict Error Handling**: Global middleware formatting errors without leaking database internals, SQL, or stack traces.
 
 ### Planned Features (Future Modules)
-* User-created custom Categories (`EXPENSE` & `INCOME`)
 * Transactions recording and history filtering
 * Monthly and Category-wise Budgets
 * Dashboard statistics and financial metrics
@@ -271,6 +271,120 @@ All responses follow a consistent JSON format:
       "name": "Vaibhav",
       "email": "vaibhav@gmail.com"
     }
+  }
+  ```
+
+---
+
+### Category Endpoints
+
+#### 1. Create Category
+* **Method**: `POST`
+* **URL**: `/api/categories`
+* **Auth**: `Bearer <JWT_TOKEN>`
+* **Request Body**:
+  ```json
+  {
+    "name": "Food",
+    "type": "EXPENSE"
+  }
+  ```
+* **Validation Rules**:
+  * `name`: string, trimmed, 2-50 characters
+  * `type`: `EXPENSE` or `INCOME`
+* **Response (201 Created)**:
+  ```json
+  {
+    "success": true,
+    "message": "Category created successfully",
+    "data": {
+      "id": "4bb9b82e-42d3-4da7-b23d-f6cd78c98775",
+      "name": "Food",
+      "type": "EXPENSE",
+      "userId": "06a1c724-4e09-4bcb-bfc3-3a5dbf6b35f3",
+      "createdAt": "2026-08-24T12:21:49.366Z",
+      "updatedAt": "2026-08-24T12:21:49.366Z"
+    }
+  }
+  ```
+
+#### 2. Get All Categories (with optional filtering)
+* **Method**: `GET`
+* **URL**: `/api/categories` (or `/api/categories?type=EXPENSE`, `/api/categories?type=INCOME`)
+* **Auth**: `Bearer <JWT_TOKEN>`
+* **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Categories fetched successfully",
+    "data": [
+      {
+        "id": "4bb9b82e-42d3-4da7-b23d-f6cd78c98775",
+        "name": "Food",
+        "type": "EXPENSE",
+        "userId": "06a1c724-4e09-4bcb-bfc3-3a5dbf6b35f3",
+        "createdAt": "2026-08-24T12:21:49.366Z",
+        "updatedAt": "2026-08-24T12:21:49.366Z"
+      }
+    ]
+  }
+  ```
+
+#### 3. Get Single Category by ID
+* **Method**: `GET`
+* **URL**: `/api/categories/:id`
+* **Auth**: `Bearer <JWT_TOKEN>`
+* **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Category fetched successfully",
+    "data": {
+      "id": "4bb9b82e-42d3-4da7-b23d-f6cd78c98775",
+      "name": "Food",
+      "type": "EXPENSE",
+      "userId": "06a1c724-4e09-4bcb-bfc3-3a5dbf6b35f3",
+      "createdAt": "2026-08-24T12:21:49.366Z",
+      "updatedAt": "2026-08-24T12:21:49.366Z"
+    }
+  }
+  ```
+
+#### 4. Update Category
+* **Method**: `PATCH`
+* **URL**: `/api/categories/:id`
+* **Auth**: `Bearer <JWT_TOKEN>`
+* **Request Body**:
+  ```json
+  {
+    "name": "Dining Out"
+  }
+  ```
+* **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Category updated successfully",
+    "data": {
+      "id": "4bb9b82e-42d3-4da7-b23d-f6cd78c98775",
+      "name": "Dining Out",
+      "type": "EXPENSE",
+      "userId": "06a1c724-4e09-4bcb-bfc3-3a5dbf6b35f3",
+      "createdAt": "2026-08-24T12:21:49.366Z",
+      "updatedAt": "2026-08-24T12:21:49.439Z"
+    }
+  }
+  ```
+
+#### 5. Delete Category
+* **Method**: `DELETE`
+* **URL**: `/api/categories/:id`
+* **Auth**: `Bearer <JWT_TOKEN>`
+* **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Category deleted successfully"
   }
   ```
 
