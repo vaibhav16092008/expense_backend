@@ -135,6 +135,20 @@ export const deleteCategory = async (
     throw new AppError("Category not found", 404);
   }
 
+  // Prevent deleting category if it is referenced by existing transactions
+  const transactionsCount = await prisma.transaction.count({
+    where: {
+      categoryId,
+    },
+  });
+
+  if (transactionsCount > 0) {
+    throw new AppError(
+      "Category cannot be deleted because it is used by transactions",
+      409
+    );
+  }
+
   await prisma.category.delete({
     where: {
       id: categoryId,
