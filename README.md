@@ -14,11 +14,11 @@ ExpenseIQ is an intelligent expense management platform engineered for seamless 
 * **User Authentication & Login**: Safe credential verification returning JWT access tokens with structured user payloads.
 * **Protected Routes & Current User Profile**: JWT authentication middleware extracting token claims and serving `/api/auth/me`.
 * **User-Created Custom Categories**: Full CRUD endpoints (`POST`, `GET`, `GET /:id`, `PATCH`, `DELETE`) with type filtering (`EXPENSE` & `INCOME`), compound uniqueness per user, and strict multi-tenant ownership isolation.
+* **Transactions Management**: Full CRUD (`POST`, `GET`, `GET /:id`, `PATCH`, `DELETE`) with decimal precision for currency, category type consistency enforcement, multi-attribute filtering (type, category, date ranges), newest-first sorting (`date DESC, createdAt DESC`), and protected category deletion.
 * **Zero Password Leakage**: Passwords and sensitive internal details are stripped at the database/service layer.
 * **Strict Error Handling**: Global middleware formatting errors without leaking database internals, SQL, or stack traces.
 
 ### Planned Features (Future Modules)
-* Transactions recording and history filtering
 * Monthly and Category-wise Budgets
 * Dashboard statistics and financial metrics
 * Real-time spending warnings and notifications
@@ -385,6 +385,159 @@ All responses follow a consistent JSON format:
   {
     "success": true,
     "message": "Category deleted successfully"
+  }
+  ```
+* **Protection**: Returns `409 Conflict` if the category has associated transactions to prevent accidental loss of financial records.
+
+---
+
+### Transaction Endpoints
+
+#### 1. Create Transaction
+* **Method**: `POST`
+* **URL**: `/api/transactions`
+* **Auth**: `Bearer <JWT_TOKEN>`
+* **Headers**: `Content-Type: application/json`
+* **Request Body**:
+  ```json
+  {
+    "amount": 250,
+    "type": "EXPENSE",
+    "categoryId": "020b6d56-2c9d-4c1a-8ea6-9bfe3ccc00ef",
+    "note": "Lunch with colleagues",
+    "date": "2026-08-20"
+  }
+  ```
+* **Validation & Business Rules**:
+  * `amount`: positive numeric value (> 0, stored accurately via Decimal)
+  * `type`: `EXPENSE` | `INCOME` (must match category's type)
+  * `categoryId`: valid UUID belonging to authenticated user
+  * `note`: optional trimmed string (max 500 characters)
+  * `date`: valid date / ISO string
+* **Response (201 Created)**:
+  ```json
+  {
+    "success": true,
+    "message": "Transaction created successfully",
+    "data": {
+      "id": "e0d90cec-0267-4d56-80d3-c9a286688a60",
+      "amount": "250.00",
+      "type": "EXPENSE",
+      "category": {
+        "id": "020b6d56-2c9d-4c1a-8ea6-9bfe3ccc00ef",
+        "name": "Food",
+        "type": "EXPENSE"
+      },
+      "note": "Lunch with colleagues",
+      "date": "2026-08-20T00:00:00.000Z",
+      "createdAt": "2026-08-24T12:53:39.055Z",
+      "updatedAt": "2026-08-24T12:53:39.055Z"
+    }
+  }
+  ```
+
+#### 2. Get Transactions (with Filters & Sorting)
+* **Method**: `GET`
+* **URL**: `/api/transactions`
+* **Query Parameters**:
+  * `type`: `EXPENSE` | `INCOME`
+  * `categoryId`: UUID
+  * `startDate`: `YYYY-MM-DD` (inclusive start of day `00:00:00.000Z`)
+  * `endDate`: `YYYY-MM-DD` (inclusive end of day `23:59:59.999Z`)
+* **Sorting**: Defaults to `date DESC, createdAt DESC` (newest transactions first)
+* **Auth**: `Bearer <JWT_TOKEN>`
+* **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Transactions fetched successfully",
+    "data": [
+      {
+        "id": "e0d90cec-0267-4d56-80d3-c9a286688a60",
+        "amount": "250.00",
+        "type": "EXPENSE",
+        "category": {
+          "id": "020b6d56-2c9d-4c1a-8ea6-9bfe3ccc00ef",
+          "name": "Food",
+          "type": "EXPENSE"
+        },
+        "note": "Lunch with colleagues",
+        "date": "2026-08-20T00:00:00.000Z",
+        "createdAt": "2026-08-24T12:53:39.055Z",
+        "updatedAt": "2026-08-24T12:53:39.055Z"
+      }
+    ]
+  }
+  ```
+
+#### 3. Get Single Transaction by ID
+* **Method**: `GET`
+* **URL**: `/api/transactions/:id`
+* **Auth**: `Bearer <JWT_TOKEN>`
+* **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Transaction fetched successfully",
+    "data": {
+      "id": "e0d90cec-0267-4d56-80d3-c9a286688a60",
+      "amount": "250.00",
+      "type": "EXPENSE",
+      "category": {
+        "id": "020b6d56-2c9d-4c1a-8ea6-9bfe3ccc00ef",
+        "name": "Food",
+        "type": "EXPENSE"
+      },
+      "note": "Lunch with colleagues",
+      "date": "2026-08-20T00:00:00.000Z",
+      "createdAt": "2026-08-24T12:53:39.055Z",
+      "updatedAt": "2026-08-24T12:53:39.055Z"
+    }
+  }
+  ```
+
+#### 4. Update Transaction
+* **Method**: `PATCH`
+* **URL**: `/api/transactions/:id`
+* **Auth**: `Bearer <JWT_TOKEN>`
+* **Request Body** (at least one field required):
+  ```json
+  {
+    "amount": 300,
+    "note": "Buffet lunch with team"
+  }
+  ```
+* **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Transaction updated successfully",
+    "data": {
+      "id": "e0d90cec-0267-4d56-80d3-c9a286688a60",
+      "amount": "300.00",
+      "type": "EXPENSE",
+      "category": {
+        "id": "020b6d56-2c9d-4c1a-8ea6-9bfe3ccc00ef",
+        "name": "Food",
+        "type": "EXPENSE"
+      },
+      "note": "Buffet lunch with team",
+      "date": "2026-08-20T00:00:00.000Z",
+      "createdAt": "2026-08-24T12:53:39.055Z",
+      "updatedAt": "2026-08-24T12:53:39.128Z"
+    }
+  }
+  ```
+
+#### 5. Delete Transaction
+* **Method**: `DELETE`
+* **URL**: `/api/transactions/:id`
+* **Auth**: `Bearer <JWT_TOKEN>`
+* **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Transaction deleted successfully"
   }
   ```
 
