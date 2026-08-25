@@ -16,11 +16,11 @@ ExpenseIQ is an intelligent expense management platform engineered for seamless 
 * **User-Created Custom Categories**: Full CRUD endpoints (`POST`, `GET`, `GET /:id`, `PATCH`, `DELETE`) with type filtering (`EXPENSE` & `INCOME`), compound uniqueness per user, and strict multi-tenant ownership isolation.
 * **Transactions Management**: Full CRUD (`POST`, `GET`, `GET /:id`, `PATCH`, `DELETE`) with decimal precision for currency, category type consistency enforcement, multi-attribute filtering (type, category, date ranges), newest-first sorting (`date DESC, createdAt DESC`), and protected category deletion.
 * **Budgets Module**: Full CRUD (`POST`, `GET`, `GET /:id`, `PATCH`, `DELETE`) supporting `OVERALL` and `CATEGORY` budgets across `MONTHLY`, `WEEKLY`, and `CUSTOM` periods with dynamic real-time spending calculations (`spent`, `remaining`, `percentage`, `status`, `isActive`), overlap detection, and category deletion protection.
+* **Dashboard & Analytics Module**: Production-ready chart-ready endpoints (`/api/dashboard/summary`, `/api/dashboard/monthly`, `/api/dashboard/categories`, `/api/dashboard/trends`, `/api/dashboard/budget-overview`) providing total cash flows, savings rates, previous-period comparisons, 12-month analytics, granular time-series spending trends, rule-based deterministic insights, and alerts.
 * **Zero Password Leakage**: Passwords and sensitive internal details are stripped at the database/service layer.
 * **Strict Error Handling**: Global middleware formatting errors without leaking database internals, SQL, or stack traces.
 
 ### Planned Features (Future Modules)
-* Dashboard statistics and financial metrics aggregations
 * Real-time spending warnings and push/email notifications
 * AI-powered spending insights, anomaly detection, and budget forecasting
 * Recurring budgets and financial reporting exports
@@ -737,6 +737,234 @@ All responses follow a consistent JSON format:
   * `90% – 99%`: `CRITICAL`
   * `100%+`: `EXCEEDED`
 * **Category Deletion Protection**: Categories referenced by existing budgets cannot be deleted (`409 Conflict`).
+
+---
+
+### Dashboard & Analytics Endpoints
+
+All dashboard endpoints require JWT Authentication (`Authorization: Bearer <accessToken>`) and are scoped strictly to the authenticated user.
+
+#### 1. Financial Summary & Overview
+* **Method**: `GET`
+* **URL**: `/api/dashboard/summary`
+* **Query Parameters**:
+  * `period`: `today` | `week` | `month` (default) | `year`
+  * `startDate`: `YYYY-MM-DD`
+  * `endDate`: `YYYY-MM-DD`
+* **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Dashboard summary fetched successfully",
+    "data": {
+      "period": "month",
+      "dateRange": {
+        "startDate": "2026-08-01T00:00:00.000Z",
+        "endDate": "2026-08-31T23:59:59.999Z"
+      },
+      "current": {
+        "income": 50000,
+        "expense": 6500,
+        "balance": 43500,
+        "savingsRate": 87,
+        "transactionCount": 4
+      },
+      "previous": {
+        "income": 45000,
+        "expense": 4000,
+        "balance": 41000,
+        "savingsRate": 91.11,
+        "transactionCount": 2
+      },
+      "comparison": {
+        "incomeChangePercentage": 11.11,
+        "expenseChangePercentage": 62.5,
+        "balanceChangePercentage": 6.1
+      },
+      "recentTransactions": [
+        {
+          "id": "tx-uuid-1",
+          "amount": "1500.00",
+          "type": "EXPENSE",
+          "category": "Food",
+          "note": "Groceries",
+          "date": "2026-08-15T00:00:00.000Z"
+        }
+      ],
+      "topCategory": {
+        "id": "cat-uuid-1",
+        "name": "Food",
+        "amount": 4500
+      },
+      "highestExpense": {
+        "id": "tx-uuid-2",
+        "amount": 3000,
+        "category": "Food",
+        "date": "2026-08-05T00:00:00.000Z"
+      },
+      "insights": [
+        {
+          "type": "SPENDING_INCREASE",
+          "severity": "INFO",
+          "message": "Your spending is 62.5% higher than the previous period."
+        },
+        {
+          "type": "TOP_CATEGORY",
+          "severity": "INFO",
+          "message": "Food is your highest expense category (69% of total spending)."
+        }
+      ],
+      "alerts": []
+    }
+  }
+  ```
+
+#### 2. Monthly Cash Flow Analytics (Chart 1: 12-Month Bar/Line Chart)
+* **Method**: `GET`
+* **URL**: `/api/dashboard/monthly`
+* **Query Parameters**:
+  * `year`: `YYYY` (default: current year)
+* **Guaranteed Format**: Always returns an array of all 12 calendar months (`Jan` to `Dec`) with zero-filled defaults.
+* **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Monthly analytics fetched successfully",
+    "data": {
+      "year": 2026,
+      "totalIncome": 95000,
+      "totalExpense": 10500,
+      "netSavings": 84500,
+      "data": [
+        { "month": "Jan", "monthIndex": 1, "income": 0, "expense": 0, "balance": 0 },
+        { "month": "Feb", "monthIndex": 2, "income": 0, "expense": 0, "balance": 0 },
+        { "month": "Jul", "monthIndex": 7, "income": 45000, "expense": 4000, "balance": 41000 },
+        { "month": "Aug", "monthIndex": 8, "income": 50000, "expense": 6500, "balance": 43500 },
+        { "month": "Dec", "monthIndex": 12, "income": 0, "expense": 0, "balance": 0 }
+      ]
+    }
+  }
+  ```
+
+#### 3. Category Expense Breakdown (Chart 2: Pie/Donut Chart)
+* **Method**: `GET`
+* **URL**: `/api/dashboard/categories`
+* **Query Parameters**:
+  * `period`: `today` | `week` | `month` | `year`
+  * `startDate`: `YYYY-MM-DD`
+  * `endDate`: `YYYY-MM-DD`
+* **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Category analytics fetched successfully",
+    "data": {
+      "dateRange": {
+        "startDate": "2026-08-01T00:00:00.000Z",
+        "endDate": "2026-08-31T23:59:59.999Z"
+      },
+      "totalExpense": 6500,
+      "categoryCount": 2,
+      "data": [
+        {
+          "categoryId": "cat-uuid-1",
+          "categoryName": "Food",
+          "amount": 4500,
+          "transactionCount": 2,
+          "percentage": 69.23
+        },
+        {
+          "categoryId": "cat-uuid-2",
+          "categoryName": "Travel",
+          "amount": 2000,
+          "transactionCount": 1,
+          "percentage": 30.77
+        }
+      ]
+    }
+  }
+  ```
+
+#### 4. Spending Trends (Chart 3: Time-Series Line Chart)
+* **Method**: `GET`
+* **URL**: `/api/dashboard/trends`
+* **Query Parameters**:
+  * `period`: `today` | `week` | `month` | `year`
+  * `granularity`: `daily` | `weekly` | `monthly` (optional; auto-resolves to daily for $\le 31$ days, weekly for $\le 90$ days, monthly for $>90$ days)
+  * `startDate`: `YYYY-MM-DD`
+  * `endDate`: `YYYY-MM-DD`
+* **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Spending trends fetched successfully",
+    "data": {
+      "granularity": "daily",
+      "dateRange": {
+        "startDate": "2026-08-01T00:00:00.000Z",
+        "endDate": "2026-08-31T23:59:59.999Z"
+      },
+      "totalExpense": 6500,
+      "averageDailyExpense": 209.68,
+      "highestSpendingDay": "2026-08-05",
+      "highestSpendingAmount": 3000,
+      "data": [
+        { "date": "2026-08-01", "expense": 0 },
+        { "date": "2026-08-05", "expense": 3000 },
+        { "date": "2026-08-10", "expense": 2000 },
+        { "date": "2026-08-15", "expense": 1500 }
+      ]
+    }
+  }
+  ```
+
+#### 5. Budget Overview & Progress Bars (Chart 4: Budget Progress Bars)
+* **Method**: `GET`
+* **URL**: `/api/dashboard/budget-overview`
+* **Centralized Logic**: 100% reuses the calculation and status logic from the Budget service.
+* **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Budget overview fetched successfully",
+    "data": {
+      "totalBudgets": 2,
+      "activeBudgets": 2,
+      "criticalBudgets": 0,
+      "exceededBudgets": 0,
+      "totalAllocated": 30000,
+      "totalSpent": 11000,
+      "totalRemaining": 19000,
+      "overallPercentage": 37,
+      "budgets": [
+        {
+          "id": "b-uuid-1",
+          "name": "Overall Budget",
+          "type": "OVERALL",
+          "period": "MONTHLY",
+          "amount": 25000,
+          "spent": 6500,
+          "remaining": 18500,
+          "percentage": 26,
+          "status": "ON_TRACK",
+          "isActive": true
+        },
+        {
+          "id": "b-uuid-2",
+          "name": "Food",
+          "type": "CATEGORY",
+          "period": "MONTHLY",
+          "amount": 5000,
+          "spent": 4500,
+          "remaining": 500,
+          "percentage": 90,
+          "status": "CRITICAL",
+          "isActive": true
+        }
+      ]
+    }
+  }
+  ```
 
 ---
 
