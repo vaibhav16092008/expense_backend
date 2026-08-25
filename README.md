@@ -17,6 +17,7 @@ ExpenseIQ is an intelligent expense management platform engineered for seamless 
 * **Transactions Management**: Full CRUD (`POST`, `GET`, `GET /:id`, `PATCH`, `DELETE`) with decimal precision for currency, category type consistency enforcement, multi-attribute filtering (type, category, date ranges), newest-first sorting (`date DESC, createdAt DESC`), and protected category deletion.
 * **Budgets Module**: Full CRUD (`POST`, `GET`, `GET /:id`, `PATCH`, `DELETE`) supporting `OVERALL` and `CATEGORY` budgets across `MONTHLY`, `WEEKLY`, and `CUSTOM` periods with dynamic real-time spending calculations (`spent`, `remaining`, `percentage`, `status`, `isActive`), overlap detection, and category deletion protection.
 * **Dashboard & Analytics Module**: Production-ready chart-ready endpoints (`/api/dashboard/summary`, `/api/dashboard/monthly`, `/api/dashboard/categories`, `/api/dashboard/trends`, `/api/dashboard/budget-overview`) providing total cash flows, savings rates, previous-period comparisons, 12-month analytics, granular time-series spending trends, rule-based deterministic insights, and alerts.
+* **Recurring Transactions Module**: Full schedule management (`POST`, `GET`, `GET /:id`, `PATCH`, `DELETE`, `POST /:id/pause`, `POST /:id/resume`, `POST /process`) supporting `DAILY`, `WEEKLY`, `MONTHLY`, and `YEARLY` frequencies with month-end anchor preservation, leap-year clamping, atomic catch-up generation of missed occurrences, database-level duplicate prevention, and seamless Budget/Dashboard integration.
 * **Zero Password Leakage**: Passwords and sensitive internal details are stripped at the database/service layer.
 * **Strict Error Handling**: Global middleware formatting errors without leaking database internals, SQL, or stack traces.
 
@@ -965,6 +966,204 @@ All dashboard endpoints require JWT Authentication (`Authorization: Bearer <acce
     }
   }
   ```
+
+---
+
+### Recurring Transaction Endpoints
+
+All recurring transaction endpoints require JWT Authentication (`Authorization: Bearer <accessToken>`) and are scoped strictly to the authenticated user.
+
+#### 1. Create Recurring Schedule
+* **Method**: `POST`
+* **URL**: `/api/recurring-transactions`
+* **Auth**: `Bearer <JWT_TOKEN>`
+* **Headers**: `Content-Type: application/json`
+* **Request Body**:
+  ```json
+  {
+    "amount": 8000,
+    "type": "EXPENSE",
+    "categoryId": "cat-uuid-rent",
+    "note": "Monthly Apartment Rent",
+    "frequency": "MONTHLY",
+    "startDate": "2026-09-01",
+    "endDate": null
+  }
+  ```
+* **Rules**:
+  * `amount`: Positive decimal (> 0).
+  * `type`: `EXPENSE` | `INCOME` (must match category's type).
+  * `frequency`: `DAILY` | `WEEKLY` | `MONTHLY` | `YEARLY`.
+  * `startDate`: Required ISO date. Server automatically sets `nextRunAt = startDate` (does NOT automatically generate historical transactions on creation).
+  * `endDate`: Optional ISO date (`endDate >= startDate`).
+* **Response (201 Created)**:
+  ```json
+  {
+    "success": true,
+    "message": "Recurring transaction created successfully",
+    "data": {
+      "id": "rec-uuid-1",
+      "amount": "8000.00",
+      "type": "EXPENSE",
+      "frequency": "MONTHLY",
+      "note": "Monthly Apartment Rent",
+      "startDate": "2026-09-01T00:00:00.000Z",
+      "nextRunAt": "2026-09-01T00:00:00.000Z",
+      "endDate": null,
+      "active": true,
+      "category": {
+        "id": "cat-uuid-rent",
+        "name": "Rent",
+        "type": "EXPENSE"
+      },
+      "createdAt": "2026-08-25T15:00:00.000Z",
+      "updatedAt": "2026-08-25T15:00:00.000Z"
+    }
+  }
+  ```
+
+#### 2. Get All Recurring Schedules (with Filters & Sorting)
+* **Method**: `GET`
+* **URL**: `/api/recurring-transactions`
+* **Query Parameters**:
+  * `active`: `true` | `false`
+  * `type`: `EXPENSE` | `INCOME`
+  * `frequency`: `DAILY` | `WEEKLY` | `MONTHLY` | `YEARLY`
+  * `categoryId`: UUID
+  * `startDate`: `YYYY-MM-DD`
+  * `endDate`: `YYYY-MM-DD`
+  * `sortBy`: `nextRunAt` (default) | `createdAt` | `amount`
+  * `sortOrder`: `asc` (default) | `desc`
+* **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Recurring transactions fetched successfully",
+    "data": [
+      {
+        "id": "rec-uuid-1",
+        "amount": "8000.00",
+        "type": "EXPENSE",
+        "frequency": "MONTHLY",
+        "note": "Monthly Apartment Rent",
+        "startDate": "2026-09-01T00:00:00.000Z",
+        "nextRunAt": "2026-09-01T00:00:00.000Z",
+        "endDate": null,
+        "active": true,
+        "category": {
+          "id": "cat-uuid-rent",
+          "name": "Rent",
+          "type": "EXPENSE"
+        },
+        "createdAt": "2026-08-25T15:00:00.000Z",
+        "updatedAt": "2026-08-25T15:00:00.000Z"
+      }
+    ]
+  }
+  ```
+
+#### 3. Get Single Recurring Schedule by ID
+* **Method**: `GET`
+* **URL**: `/api/recurring-transactions/:id`
+* **Auth**: `Bearer <JWT_TOKEN>`
+* **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Recurring transaction fetched successfully",
+    "data": {
+      "id": "rec-uuid-1",
+      "amount": "8000.00",
+      "type": "EXPENSE",
+      "frequency": "MONTHLY",
+      "note": "Monthly Apartment Rent",
+      "startDate": "2026-09-01T00:00:00.000Z",
+      "nextRunAt": "2026-09-01T00:00:00.000Z",
+      "endDate": null,
+      "active": true,
+      "category": {
+        "id": "cat-uuid-rent",
+        "name": "Rent",
+        "type": "EXPENSE"
+      },
+      "createdAt": "2026-08-25T15:00:00.000Z",
+      "updatedAt": "2026-08-25T15:00:00.000Z"
+    }
+  }
+  ```
+
+#### 4. Update Recurring Schedule
+* **Method**: `PATCH`
+* **URL**: `/api/recurring-transactions/:id`
+* **Auth**: `Bearer <JWT_TOKEN>`
+* **Request Body** (at least one field required):
+  ```json
+  {
+    "amount": 8500
+  }
+  ```
+* **Historical Protection**: Updating a schedule modifies only future occurrences; already-generated historical transactions remain untouched.
+* **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Recurring transaction updated successfully",
+    "data": { ... }
+  }
+  ```
+
+#### 5. Delete Recurring Schedule
+* **Method**: `DELETE`
+* **URL**: `/api/recurring-transactions/:id`
+* **Auth**: `Bearer <JWT_TOKEN>`
+* **Historical Protection**: Deleting a recurring schedule removes the template only; all past generated transactions are preserved intact.
+* **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Recurring transaction deleted successfully"
+  }
+  ```
+
+#### 6. Pause / Resume Schedule
+* **Pause Endpoint**: `POST /api/recurring-transactions/:id/pause`
+  * Sets `active = false`. Paused schedules are skipped during occurrence processing.
+* **Resume Endpoint**: `POST /api/recurring-transactions/:id/resume`
+  * Sets `active = true` and advances `nextRunAt` to the next valid upcoming occurrence.
+
+#### 7. Process Due Recurring Transactions (Catch-Up Processor)
+* **Method**: `POST`
+* **URL**: `/api/recurring-transactions/process`
+* **Auth**: `Bearer <JWT_TOKEN>`
+* **User Scoping**: Processes **ONLY** the authenticated user's due recurring schedules (`nextRunAt <= now`).
+* **Idempotency & Duplicate Prevention**: Database uniqueness constraint `(recurringTransactionId, recurringOccurrenceAt)` guarantees zero duplicate transactions even during concurrent/multiple runs.
+* **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Recurring transactions processed successfully",
+    "data": {
+      "processedSchedules": 2,
+      "generatedTransactions": 3,
+      "skippedDuplicates": 0,
+      "deactivatedSchedules": 0
+    }
+  }
+  ```
+
+---
+
+### Date Calculation & Occurrence Rules
+
+* **Anchor Day Preservation (Month-End)**:
+  * Schedules starting on day 31 (e.g., Jan 31) preserve day 31 as the anchor:
+    * `Jan 31` $\rightarrow$ `Feb 28` (or `Feb 29`) $\rightarrow$ `Mar 31` $\rightarrow$ `Apr 30` $\rightarrow$ `May 31`.
+* **Leap-Year Handling (Yearly)**:
+  * Schedules starting on Feb 29 (e.g., Feb 29, 2028) generate on `Feb 28` in non-leap years (2029, 2030, 2031) and `Feb 29` in leap years.
+* **End Date Clamping**:
+  * Occurrences are generated only while `occurrenceDate <= endDate`. If the next occurrence exceeds `endDate`, the schedule is automatically marked `active = false`.
+* **Seamless Ecosystem Integration**:
+  * Generated transactions are standard `Transaction` records and automatically flow into Budgets, Dashboard, and Analytics.
 
 ---
 
