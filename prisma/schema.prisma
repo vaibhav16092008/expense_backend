@@ -28,56 +28,69 @@ enum BudgetPeriod {
   CUSTOM
 }
 
+enum RecurringFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
 model User {
-  id           String        @id @default(uuid())
-  name         String
-  email        String        @unique
-  password     String
+  id                    String                 @id @default(uuid())
+  name                  String
+  email                 String                 @unique
+  password              String
 
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
 
-  categories   Category[]
-  transactions Transaction[]
-  budgets      Budget[]
+  categories            Category[]
+  transactions          Transaction[]
+  budgets               Budget[]
+  recurringTransactions RecurringTransaction[]
 
   @@map("users")
 }
 
 model Category {
-  id           String        @id @default(uuid())
-  name         String
-  type         CategoryType
+  id                    String                 @id @default(uuid())
+  name                  String
+  type                  CategoryType
 
-  userId       String
-  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId                String
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  transactions Transaction[]
-  budgets      Budget[]
+  transactions          Transaction[]
+  budgets               Budget[]
+  recurringTransactions RecurringTransaction[]
 
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
 
   @@unique([userId, name, type])
   @@map("categories")
 }
 
 model Transaction {
-  id          String          @id @default(uuid())
-  amount      Decimal         @db.Decimal(12, 2)
-  type        TransactionType
-  note        String?
-  date        DateTime
+  id                     String                @id @default(uuid())
+  amount                 Decimal               @db.Decimal(12, 2)
+  type                   TransactionType
+  note                   String?
+  date                   DateTime
 
-  userId      String
-  categoryId  String
+  userId                 String
+  categoryId             String
+  recurringTransactionId String?
+  recurringOccurrenceAt  DateTime?
 
-  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  category    Category        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  user                   User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category               Category              @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  recurringTransaction   RecurringTransaction? @relation(fields: [recurringTransactionId], references: [id], onDelete: SetNull)
 
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
 
+  @@unique([recurringTransactionId, recurringOccurrenceAt])
   @@index([userId])
   @@index([userId, date])
   @@index([userId, type])
@@ -108,3 +121,34 @@ model Budget {
   @@index([userId, categoryId])
   @@map("budgets")
 }
+
+model RecurringTransaction {
+  id           String             @id @default(uuid())
+  amount       Decimal            @db.Decimal(12, 2)
+  type         TransactionType
+  note         String?
+  frequency    RecurringFrequency
+
+  startDate    DateTime
+  nextRunAt    DateTime
+  endDate      DateTime?
+
+  active       Boolean            @default(true)
+
+  userId       String
+  categoryId   String
+
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category     Category           @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  transactions Transaction[]
+
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@index([userId])
+  @@index([userId, active])
+  @@index([userId, nextRunAt])
+  @@index([userId, categoryId])
+  @@map("recurring_transactions")
+}
+
