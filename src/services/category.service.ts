@@ -149,6 +149,18 @@ export const deleteCategory = async (
     );
   }
 
+  // Prevent deleting category if it is referenced by existing budgets
+  const budgetsCount = await prisma.budget.count({
+    where: { categoryId },
+  });
+
+  if (budgetsCount > 0) {
+    throw new AppError(
+      "Category cannot be deleted because it is used by budgets",
+      409
+    );
+  }
+
   await prisma.category.delete({
     where: {
       id: categoryId,
