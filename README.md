@@ -15,14 +15,15 @@ ExpenseIQ is an intelligent expense management platform engineered for seamless 
 * **Protected Routes & Current User Profile**: JWT authentication middleware extracting token claims and serving `/api/auth/me`.
 * **User-Created Custom Categories**: Full CRUD endpoints (`POST`, `GET`, `GET /:id`, `PATCH`, `DELETE`) with type filtering (`EXPENSE` & `INCOME`), compound uniqueness per user, and strict multi-tenant ownership isolation.
 * **Transactions Management**: Full CRUD (`POST`, `GET`, `GET /:id`, `PATCH`, `DELETE`) with decimal precision for currency, category type consistency enforcement, multi-attribute filtering (type, category, date ranges), newest-first sorting (`date DESC, createdAt DESC`), and protected category deletion.
+* **Budgets Module**: Full CRUD (`POST`, `GET`, `GET /:id`, `PATCH`, `DELETE`) supporting `OVERALL` and `CATEGORY` budgets across `MONTHLY`, `WEEKLY`, and `CUSTOM` periods with dynamic real-time spending calculations (`spent`, `remaining`, `percentage`, `status`, `isActive`), overlap detection, and category deletion protection.
 * **Zero Password Leakage**: Passwords and sensitive internal details are stripped at the database/service layer.
 * **Strict Error Handling**: Global middleware formatting errors without leaking database internals, SQL, or stack traces.
 
 ### Planned Features (Future Modules)
-* Monthly and Category-wise Budgets
-* Dashboard statistics and financial metrics
-* Real-time spending warnings and notifications
-* AI-powered spending insights and anomaly detection
+* Dashboard statistics and financial metrics aggregations
+* Real-time spending warnings and push/email notifications
+* AI-powered spending insights, anomaly detection, and budget forecasting
+* Recurring budgets and financial reporting exports
 
 ---
 
@@ -540,6 +541,202 @@ All responses follow a consistent JSON format:
     "message": "Transaction deleted successfully"
   }
   ```
+
+---
+
+### Budget Endpoints
+
+#### 1. Create Budget
+* **Method**: `POST`
+* **URL**: `/api/budgets`
+* **Auth**: `Bearer <JWT_TOKEN>`
+* **Headers**: `Content-Type: application/json`
+
+**Overall Budget Request Example**:
+```json
+{
+  "amount": 25000,
+  "type": "OVERALL",
+  "period": "MONTHLY",
+  "startDate": "2026-08-01",
+  "endDate": "2026-08-31"
+}
+```
+
+**Category Budget Request Example**:
+```json
+{
+  "amount": 5000,
+  "type": "CATEGORY",
+  "categoryId": "020b6d56-2c9d-4c1a-8ea6-9bfe3ccc00ef",
+  "period": "MONTHLY",
+  "startDate": "2026-08-01",
+  "endDate": "2026-08-31"
+}
+```
+
+* **Validation & Business Rules**:
+  * `amount`: Required positive decimal (> 0).
+  * `type`: `OVERALL` | `CATEGORY`.
+  * `period`: `WEEKLY` | `MONTHLY` | `CUSTOM`.
+  * `startDate` / `endDate`: Required valid ISO dates. `endDate >= startDate`.
+  * `MONTHLY`: `startDate` must be day 1 of month; `endDate` must be the last calendar day of the same month.
+  * `WEEKLY`: `endDate - startDate` must span exactly 7 calendar days.
+  * `CATEGORY`: `categoryId` is **required**, must belong to authenticated user, and must be of type `EXPENSE` (budgets on `INCOME` categories are rejected with 400).
+  * `OVERALL`: `categoryId` must be `null` / omitted.
+  * **No Overlaps**: Overlapping budgets for the same scope (`OVERALL` or same `categoryId`) within the user account are rejected with `409 Conflict`.
+* **Response (201 Created)**:
+  ```json
+  {
+    "success": true,
+    "message": "Budget created successfully",
+    "data": {
+      "id": "7f8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
+      "amount": "5000.00",
+      "type": "CATEGORY",
+      "period": "MONTHLY",
+      "startDate": "2026-08-01T00:00:00.000Z",
+      "endDate": "2026-08-31T23:59:59.999Z",
+      "category": {
+        "id": "020b6d56-2c9d-4c1a-8ea6-9bfe3ccc00ef",
+        "name": "Food",
+        "type": "EXPENSE"
+      },
+      "spent": "0.00",
+      "remaining": "5000.00",
+      "percentage": 0,
+      "status": "ON_TRACK",
+      "isActive": true,
+      "createdAt": "2026-08-25T12:00:00.000Z",
+      "updatedAt": "2026-08-25T12:00:00.000Z"
+    }
+  }
+  ```
+
+#### 2. Get All Budgets (with Filtering)
+* **Method**: `GET`
+* **URL**: `/api/budgets`
+* **Query Parameters**:
+  * `type`: `OVERALL` | `CATEGORY`
+  * `period`: `WEEKLY` | `MONTHLY` | `CUSTOM`
+  * `categoryId`: UUID
+  * `startDate`: `YYYY-MM-DD`
+  * `endDate`: `YYYY-MM-DD`
+  * `status`: `ON_TRACK` | `WARNING` | `CRITICAL` | `EXCEEDED`
+* **Sorting**: `startDate DESC, createdAt DESC`
+* **Auth**: `Bearer <JWT_TOKEN>`
+* **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Budgets fetched successfully",
+    "data": [
+      {
+        "id": "7f8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
+        "amount": "5000.00",
+        "type": "CATEGORY",
+        "period": "MONTHLY",
+        "startDate": "2026-08-01T00:00:00.000Z",
+        "endDate": "2026-08-31T23:59:59.999Z",
+        "category": {
+          "id": "020b6d56-2c9d-4c1a-8ea6-9bfe3ccc00ef",
+          "name": "Food",
+          "type": "EXPENSE"
+        },
+        "spent": "3200.00",
+        "remaining": "1800.00",
+        "percentage": 64,
+        "status": "ON_TRACK",
+        "isActive": true,
+        "createdAt": "2026-08-25T12:00:00.000Z",
+        "updatedAt": "2026-08-25T12:00:00.000Z"
+      }
+    ]
+  }
+  ```
+
+#### 3. Get Single Budget by ID
+* **Method**: `GET`
+* **URL**: `/api/budgets/:id`
+* **Auth**: `Bearer <JWT_TOKEN>`
+* **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Budget fetched successfully",
+    "data": {
+      "id": "7f8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
+      "amount": "5000.00",
+      "type": "CATEGORY",
+      "period": "MONTHLY",
+      "startDate": "2026-08-01T00:00:00.000Z",
+      "endDate": "2026-08-31T23:59:59.999Z",
+      "category": {
+        "id": "020b6d56-2c9d-4c1a-8ea6-9bfe3ccc00ef",
+        "name": "Food",
+        "type": "EXPENSE"
+      },
+      "spent": "3200.00",
+      "remaining": "1800.00",
+      "percentage": 64,
+      "status": "ON_TRACK",
+      "isActive": true,
+      "createdAt": "2026-08-25T12:00:00.000Z",
+      "updatedAt": "2026-08-25T12:00:00.000Z"
+    }
+  }
+  ```
+
+#### 4. Update Budget
+* **Method**: `PATCH`
+* **URL**: `/api/budgets/:id`
+* **Auth**: `Bearer <JWT_TOKEN>`
+* **Request Body** (at least one field required):
+  ```json
+  {
+    "amount": 6000
+  }
+  ```
+* **Validation**: Validates the merged final budget state against all business rules (overlap, ownership, category expense type, period constraints).
+* **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Budget updated successfully",
+    "data": { ... }
+  }
+  ```
+
+#### 5. Delete Budget
+* **Method**: `DELETE`
+* **URL**: `/api/budgets/:id`
+* **Auth**: `Bearer <JWT_TOKEN>`
+* **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Budget deleted successfully"
+  }
+  ```
+* **Non-Destructive**: Deleting a budget removes only the spending goal; associated transactions remain intact.
+
+---
+
+### Dynamic Calculation & Budget Rules
+
+* **Zero Derived Storage**: `spent`, `remaining`, `percentage`, `status`, and `isActive` are calculated dynamically on read from matching transactions.
+* **Spending Formula**:
+  * For `OVERALL`: Sum of all user transactions where `type = EXPENSE` and `date` falls inside `[startDate, endDate]`.
+  * For `CATEGORY`: Sum of all user transactions where `type = EXPENSE`, `categoryId = budget.categoryId`, and `date` falls inside `[startDate, endDate]`.
+  * `INCOME` transactions are never counted towards spending.
+* **Remaining**: `budget.amount - spent` (can be negative during overspending; never clamped).
+* **Usage Percentage**: `Math.round((spent / budget.amount) * 100)`.
+* **Budget Status Tiers**:
+  * `0% – 69%`: `ON_TRACK`
+  * `70% – 89%`: `WARNING`
+  * `90% – 99%`: `CRITICAL`
+  * `100%+`: `EXCEEDED`
+* **Category Deletion Protection**: Categories referenced by existing budgets cannot be deleted (`409 Conflict`).
 
 ---
 

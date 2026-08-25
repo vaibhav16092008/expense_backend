@@ -17,6 +17,17 @@ enum TransactionType {
   INCOME
 }
 
+enum BudgetType {
+  OVERALL
+  CATEGORY
+}
+
+enum BudgetPeriod {
+  WEEKLY
+  MONTHLY
+  CUSTOM
+}
+
 model User {
   id           String        @id @default(uuid())
   name         String
@@ -28,6 +39,7 @@ model User {
 
   categories   Category[]
   transactions Transaction[]
+  budgets      Budget[]
 
   @@map("users")
 }
@@ -41,6 +53,7 @@ model Category {
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   transactions Transaction[]
+  budgets      Budget[]
 
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
@@ -70,4 +83,28 @@ model Transaction {
   @@index([userId, type])
   @@index([userId, categoryId])
   @@map("transactions")
+}
+
+model Budget {
+  id         String       @id @default(uuid())
+  amount     Decimal      @db.Decimal(12, 2)
+  type       BudgetType
+  period     BudgetPeriod
+  startDate  DateTime
+  endDate    DateTime
+
+  userId     String
+  categoryId String?
+
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category   Category?     @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  @@index([userId])
+  @@index([userId, startDate, endDate])
+  @@index([userId, type])
+  @@index([userId, categoryId])
+  @@map("budgets")
 }
