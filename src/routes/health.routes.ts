@@ -10,7 +10,12 @@ router.get("/", (_req: Request, res: Response) => {
 
 router.get("/db", async (_req: Request, res: Response) => {
   try {
-    await prisma.$queryRaw`SELECT 1`;
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Database check timed out")), 5000)
+    );
+
+    await Promise.race([prisma.$queryRaw`SELECT 1`, timeoutPromise]);
+
     sendSuccess(res, 200, "Database connection is healthy");
   } catch (error) {
     console.error("Database health check failed:", error);

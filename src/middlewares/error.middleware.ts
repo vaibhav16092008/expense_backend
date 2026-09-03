@@ -35,8 +35,21 @@ export const errorHandler = (
     return;
   }
 
-  // Server internal logging (never exposed to client)
-  console.error("Unhandled Error:", err);
+  // Handle Express body-parser size limit error (100kb limit)
+  if (
+    err &&
+    typeof err === "object" &&
+    ("type" in err && err.type === "entity.too.large" || "status" in err && (err as { status: number }).status === 413)
+  ) {
+    sendError(res, 413, "Request body size exceeds 100kb limit");
+    return;
+  }
 
-  sendError(res, 500, "Something went wrong");
+  // Server internal logging (never exposed to client)
+  if (process.env.NODE_ENV !== "test") {
+    console.error("Unhandled Error:", err);
+  }
+
+  // Sanitize internal errors in production
+  sendError(res, 500, "Internal server error");
 };
