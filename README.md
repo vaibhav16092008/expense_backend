@@ -18,6 +18,7 @@ ExpenseIQ is an intelligent expense management platform engineered for seamless 
 * **Budgets Module**: Full CRUD (`POST`, `GET`, `GET /:id`, `PATCH`, `DELETE`) supporting `OVERALL` and `CATEGORY` budgets across `MONTHLY`, `WEEKLY`, and `CUSTOM` periods with dynamic real-time spending calculations (`spent`, `remaining`, `percentage`, `status`, `isActive`), overlap detection, and category deletion protection.
 * **Dashboard & Analytics Module**: Production-ready chart-ready endpoints (`/api/dashboard/summary`, `/api/dashboard/monthly`, `/api/dashboard/categories`, `/api/dashboard/trends`, `/api/dashboard/budget-overview`) providing total cash flows, savings rates, previous-period comparisons, 12-month analytics, granular time-series spending trends, rule-based deterministic insights, and alerts.
 * **Recurring Transactions Module**: Full schedule management (`POST`, `GET`, `GET /:id`, `PATCH`, `DELETE`, `POST /:id/pause`, `POST /:id/resume`, `POST /process`) supporting `DAILY`, `WEEKLY`, `MONTHLY`, and `YEARLY` frequencies with month-end anchor preservation, leap-year clamping, atomic catch-up generation of missed occurrences, database-level duplicate prevention, and seamless Budget/Dashboard integration.
+* **Financial Goals Module**: Full savings goals & contribution tracking system (`POST`, `GET`, `GET /summary`, `GET /:id`, `PATCH`, `DELETE`, `POST /:id/pause`, `POST /:id/resume`, `POST /:id/complete`, `POST /:id/contributions`, `GET /:id/contributions`, `DELETE /:goalId/contributions/:contributionId`) with atomic increment/decrement transactions, non-persisted runtime calculations (`remainingAmount`, `progressPercentage`, `daysRemaining`, `derivedStatus`), aggregate summaries, top-goal tie-breaking, and strict multi-tenant isolation.
 * **Zero Password Leakage**: Passwords and sensitive internal details are stripped at the database/service layer.
 * **Strict Error Handling**: Global middleware formatting errors without leaking database internals, SQL, or stack traces.
 
@@ -1174,3 +1175,54 @@ All recurring transaction endpoints require JWT Authentication (`Authorization: 
 3. **Data Ownership**: Architectural foundation ensures all resources are scoped and isolated by `userId`.
 4. **Input Validation**: All payloads validated with Zod before reaching services.
 5. **No Credential Leaks**: Stack traces and database internals are logged on the server but hidden from client error responses.
+
+---
+
+## 9. Financial Goals Module API Reference
+
+Base Path: `/api/goals`  
+All endpoints require JWT Authentication: `Authorization: Bearer <TOKEN>`
+
+### Database Models & Enums
+
+* **`GoalStatus`**: `ACTIVE`, `PAUSED`, `COMPLETED`, `OVERDUE`
+* **`ContributionType`**: `MANUAL`, `ADJUSTMENT`
+* **`FinancialGoal`**: `id`, `name`, `description`, `targetAmount` (`Decimal(12,2)`), `currentAmount` (`Decimal(12,2)`), `deadline` (`DateTime?`), `status`, `userId`, `createdAt`, `updatedAt`
+* **`GoalContribution`**: `id`, `amount` (`Decimal(12,2)`), `type`, `note`, `goalId`, `userId`, `createdAt`
+
+### Endpoints Overview
+
+| Method | Route | Description |
+|---|---|---|
+| `POST` | `/api/goals` | Create a new financial savings goal |
+| `GET` | `/api/goals` | List all goals with filtering & sorting |
+| `GET` | `/api/goals/summary` | Get aggregated summary metrics |
+| `GET` | `/api/goals/:id` | Get single goal by ID |
+| `PATCH` | `/api/goals/:id` | Update goal mutable fields |
+| `DELETE` | `/api/goals/:id` | Delete goal & cascade contributions |
+| `POST` | `/api/goals/:id/pause` | Pause goal status |
+| `POST` | `/api/goals/:id/resume` | Resume goal status to ACTIVE |
+| `POST` | `/api/goals/:id/complete` | Mark goal status as COMPLETED |
+| `POST` | `/api/goals/:id/contributions` | Add contribution (atomic increment) |
+| `GET` | `/api/goals/:id/contributions` | List contribution history for goal |
+| `DELETE` | `/api/goals/:goalId/contributions/:contributionId` | Delete contribution (atomic decrement) |
+
+### Runtime Calculations (Non-Persisted)
+
+- **`remainingAmount`**: `max(targetAmount - currentAmount, 0)`
+- **`progressPercentage`**: `min((currentAmount / targetAmount) * 100, 100)`
+- **`daysRemaining`**: UTC calendar-day difference between today and deadline (`null` if no deadline)
+- **`derivedStatus`** precedence order:
+  1. `PAUSED`
+  2. `COMPLETED`
+  3. `NOT_STARTED` (when `currentAmount === 0`)
+  4. `OVERDUE` (when deadline passed & not completed)
+  5. `AT_RISK` (when progress >10% behind linear target pace)
+  6. `ON_TRACK` (otherwise)
+
+### Contribution & Transaction Rules
+- Contributions to `PAUSED` or `COMPLETED` goals are rejected (HTTP 400).
+- Contributions use Prisma transactions and atomic `{ increment: amount }` / `{ decrement: amount }` operations.
+- `currentAmount` never drops below 0.
+- Goal deletion cascades to contributions, while preserving all unrelated `Transaction` records.
+
