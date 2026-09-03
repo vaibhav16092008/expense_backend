@@ -101,7 +101,14 @@ DATABASE_URL="postgresql://postgres:PASSWORD@localhost:5432/expenseiq?schema=pub
 JWT_ACCESS_SECRET=replace_with_strong_secret
 JWT_ACCESS_EXPIRES_IN=7d
 NODE_ENV=development
+CORS_ORIGIN=*
 ```
+
+> [!IMPORTANT]
+> **Production Environment Requirements (`NODE_ENV=production`)**:
+> - `JWT_ACCESS_SECRET` must be explicitly set to a custom strong key (the default fallback secret is blocked on startup).
+> - `DATABASE_URL` must be explicitly configured.
+> - `CORS_ORIGIN` can be set to explicit frontend origins (e.g. `https://app.expenseiq.com`).
 
 ---
 

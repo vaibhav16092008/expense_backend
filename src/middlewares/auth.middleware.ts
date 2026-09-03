@@ -2,6 +2,11 @@ import { Request, Response, NextFunction } from "express";
 import { verifyAccessToken, TokenPayload } from "../utils/token.js";
 import { sendError } from "../utils/response.js";
 
+/**
+ * JWT Bearer Authentication Middleware.
+ * Note: Access tokens are verified using JWT_ACCESS_SECRET.
+ * TODO: Refresh Token rotation and session revocation planned for Phase 2 authentication enhancement.
+ */
 export interface AuthenticatedRequest extends Request {
   user?: TokenPayload;
 }
