@@ -5,6 +5,7 @@ import { authRouter } from "./routes/auth.routes.js";
 import { categoryRouter } from "./routes/category.routes.js";
 import { transactionRouter } from "./routes/transaction.routes.js";
 import { budgetRouter } from "./routes/budget.routes.js";
+import { goalRouter } from "./routes/goal.routes.js";
 import { dashboardRouter } from "./routes/dashboard.routes.js";
 import { recurringTransactionRouter } from "./routes/recurringTransaction.routes.js";
 import { notFoundHandler, errorHandler } from "./middlewares/error.middleware.js";
@@ -23,6 +24,7 @@ app.use("/api/transactions", transactionRouter);
 app.use("/api/budgets", budgetRouter);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/recurring-transactions", recurringTransactionRouter);
+app.use("/api/goals", goalRouter);
 
 // 404 Handler
 app.use(notFoundHandler);
