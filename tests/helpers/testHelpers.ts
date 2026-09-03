@@ -51,7 +51,7 @@ export async function createTestUser(suffix?: string): Promise<TestUser> {
 
   return {
     id: login.body.data.user.id,
-    email,
+    email: email.toLowerCase(),
     token: login.body.data.accessToken,
   };
 }

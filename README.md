@@ -19,6 +19,7 @@ ExpenseIQ is an intelligent expense management platform engineered for seamless 
 * **Dashboard & Analytics Module**: Production-ready chart-ready endpoints (`/api/dashboard/summary`, `/api/dashboard/monthly`, `/api/dashboard/categories`, `/api/dashboard/trends`, `/api/dashboard/budget-overview`) providing total cash flows, savings rates, previous-period comparisons, 12-month analytics, granular time-series spending trends, rule-based deterministic insights, and alerts.
 * **Recurring Transactions Module**: Full schedule management (`POST`, `GET`, `GET /:id`, `PATCH`, `DELETE`, `POST /:id/pause`, `POST /:id/resume`, `POST /process`) supporting `DAILY`, `WEEKLY`, `MONTHLY`, and `YEARLY` frequencies with month-end anchor preservation, leap-year clamping, atomic catch-up generation of missed occurrences, database-level duplicate prevention, and seamless Budget/Dashboard integration.
 * **Financial Goals Module**: Full savings goals & contribution tracking system (`POST`, `GET`, `GET /summary`, `GET /:id`, `PATCH`, `DELETE`, `POST /:id/pause`, `POST /:id/resume`, `POST /:id/complete`, `POST /:id/contributions`, `GET /:id/contributions`, `DELETE /:goalId/contributions/:contributionId`) with atomic increment/decrement transactions, non-persisted runtime calculations (`remainingAmount`, `progressPercentage`, `daysRemaining`, `derivedStatus`), aggregate summaries, top-goal tie-breaking, and strict multi-tenant isolation.
+* **User Profile & Settings Module**: Complete profile management, secure bcrypt password change, application settings & preferences (`currency`, `monthlyBudgetEnabled`, `monthlyBudgetAmount`, `budgetAlertsEnabled`, `recurringRemindersEnabled`, `goalRemindersEnabled`, `theme`), auto-upserted user settings, password-verified account deletion, and full database cascade teardown (`/api/users/me`, `/api/users/me/password`, `/api/users/settings`).
 * **Zero Password Leakage**: Passwords and sensitive internal details are stripped at the database/service layer.
 * **Strict Error Handling**: Global middleware formatting errors without leaking database internals, SQL, or stack traces.
 
@@ -1225,4 +1226,36 @@ All endpoints require JWT Authentication: `Authorization: Bearer <TOKEN>`
 - Contributions use Prisma transactions and atomic `{ increment: amount }` / `{ decrement: amount }` operations.
 - `currentAmount` never drops below 0.
 - Goal deletion cascades to contributions, while preserving all unrelated `Transaction` records.
+
+---
+
+## 10. User Profile & Settings Module API Reference
+
+Base Path: `/api/users`  
+All endpoints require JWT Authentication: `Authorization: Bearer <TOKEN>`
+
+### Database Models & Enums
+
+* **`CurrencyCode`**: `INR`, `USD`, `EUR`, `GBP`, `AED`
+* **`ThemePreference`**: `SYSTEM`, `LIGHT`, `DARK`
+* **`UserSettings`**: `id`, `userId` (`@unique`), `currency` (`default: INR`), `monthlyBudgetEnabled` (`default: false`), `monthlyBudgetAmount` (`Decimal(12,2)?`), `budgetAlertsEnabled` (`default: true`), `recurringRemindersEnabled` (`default: true`), `goalRemindersEnabled` (`default: true`), `theme` (`default: SYSTEM`), `createdAt`, `updatedAt`
+
+### Endpoints Overview
+
+| Method | Route | Description |
+|---|---|---|
+| `GET` | `/api/users/me` | Fetch authenticated user's safe profile (`id`, `name`, `email`, `createdAt`, `updatedAt`) |
+| `PATCH` | `/api/users/me` | Update profile information (`name`) |
+| `PATCH` | `/api/users/me/password` | Securely change password with current password verification |
+| `GET` | `/api/users/settings` | Get user preferences (auto-creates defaults via upsert) |
+| `PATCH` | `/api/users/settings` | Update preferences (`currency`, `monthlyBudgetEnabled`, `monthlyBudgetAmount`, alerts, `theme`) |
+| `DELETE` | `/api/users/me` | Permanently delete user account & cascade all user data after password verification |
+
+### Key Business & Security Rules
+- **Safe Profile Projections**: Password hash is never returned in API responses.
+- **Password Change**: Verification of `currentPassword` using bcrypt comparison is strictly required. New password must differ from current password and be $\ge$ 6 characters.
+- **User Settings Auto-Upsert**: Accessing `/api/users/settings` automatically initializes default settings (`INR`, `SYSTEM`, alerts enabled) if not present.
+- **Monthly Budget Preference**: `monthlyBudgetAmount` is a preference only and remains independent from the Budgets module.
+- **Account Deletion Cascade**: Account deletion requires password confirmation. Deleting a user cascade-deletes all owned data (`UserSettings`, `Category`, `Transaction`, `Budget`, `RecurringTransaction`, `FinancialGoal`, `GoalContribution`).
+
 
