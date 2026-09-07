@@ -317,7 +317,7 @@ import { formatCsvRow } from "../utils/csv.js";
 
 export const exportTransactionsStream = async (
   userId: string,
-  filters: TransactionQueryInput,
+  filters: Partial<TransactionQueryInput>,
   writable: Writable
 ): Promise<void> => {
   const where: Prisma.TransactionWhereInput = {
