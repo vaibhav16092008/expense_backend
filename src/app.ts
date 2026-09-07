@@ -14,6 +14,7 @@ import { recurringTransactionRouter } from "./routes/recurringTransaction.routes
 import { userRouter } from "./routes/user.routes.js";
 import { reportRouter } from "./routes/report.routes.js";
 import { exportRouter } from "./routes/export.routes.js";
+import { notificationRouter } from "./routes/notification.routes.js";
 import { notFoundHandler, errorHandler } from "./middlewares/error.middleware.js";
 
 const app: Express = express();
@@ -58,6 +59,7 @@ app.use("/api/goals", goalRouter);
 app.use("/api/users", userRouter);
 app.use("/api/reports", reportRouter);
 app.use("/api/exports", exportRouter);
+app.use("/api/notifications", notificationRouter);
 
 // 6. 404 Handler
 app.use(notFoundHandler);

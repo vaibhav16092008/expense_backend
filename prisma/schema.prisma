@@ -52,6 +52,7 @@ model User {
   goalContributions     GoalContribution[]
   settings              UserSettings?
   sessions              UserSession[]
+  notifications         Notification[]
 
   @@map("users")
 }
@@ -240,6 +241,7 @@ model UserSettings {
   budgetAlertsEnabled       Boolean         @default(true)
   recurringRemindersEnabled Boolean         @default(true)
   goalRemindersEnabled      Boolean         @default(true)
+  monthlySummaryEnabled     Boolean         @default(true)
   theme                     ThemePreference @default(SYSTEM)
   createdAt                 DateTime        @default(now())
   updatedAt                 DateTime        @updatedAt
@@ -247,6 +249,46 @@ model UserSettings {
   user                      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_settings")
+}
+
+enum NotificationType {
+  BUDGET_WARNING
+  BUDGET_CRITICAL
+  BUDGET_EXCEEDED
+  RECURRING_UPCOMING
+  RECURRING_DUE
+  GOAL_DEADLINE
+  GOAL_PROGRESS
+  MONTHLY_SUMMARY
+}
+
+enum NotificationSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+model Notification {
+  id              String               @id @default(uuid())
+  userId          String
+  type            NotificationType
+  title           String
+  message         String
+  severity        NotificationSeverity @default(INFO)
+  isRead          Boolean              @default(false)
+  referenceType   String?
+  referenceId     String?
+  notificationKey String
+
+  createdAt       DateTime             @default(now())
+  readAt          DateTime?
+
+  user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type, notificationKey])
+  @@index([userId, isRead, createdAt])
+  @@index([userId, type, createdAt])
+  @@map("notifications")
 }
 
 model UserSession {

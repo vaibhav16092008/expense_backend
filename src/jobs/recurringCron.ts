@@ -1,6 +1,7 @@
 import cron, { ScheduledTask } from "node-cron";
 import { env } from "../config/env.js";
 import { processDueRecurringTransactions } from "../services/recurringTransaction.service.js";
+import { generateAllNotifications } from "../services/notification.service.js";
 
 let cronTask: ScheduledTask | null = null;
 let isProcessing = false;
@@ -16,7 +17,11 @@ export const runRecurringJob = async (): Promise<void> => {
 
   isProcessing = true;
   try {
-    console.log("[CRON] Starting automated recurring transaction processing...");
+    console.log("[CRON] Starting automated notification generation & recurring transaction processing...");
+    // 1. Generate notification events FIRST so due recurring reminders capture nextRunAt before advancement
+    await generateAllNotifications();
+
+    // 2. Process due recurring transactions SECOND
     const summary = await processDueRecurringTransactions();
     console.log(
       `[CRON] Recurring transaction job completed. Schedules processed: ${summary.processedSchedules}, Generated: ${summary.generatedTransactions}, Skipped: ${summary.skippedDuplicates}, Deactivated: ${summary.deactivatedSchedules}`
