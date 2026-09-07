@@ -4,8 +4,8 @@ import { sendError } from "../utils/response.js";
 
 /**
  * JWT Bearer Authentication Middleware.
- * Note: Access tokens are verified using JWT_ACCESS_SECRET.
- * TODO: Refresh Token rotation and session revocation planned for Phase 2 authentication enhancement.
+ * Statelessly verifies short-lived (15m) access tokens.
+ * Attaches req.user = { userId, sessionId } without performing a DB lookup on every request.
  */
 export interface AuthenticatedRequest extends Request {
   user?: TokenPayload;

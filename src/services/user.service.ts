@@ -168,6 +168,17 @@ export const changePassword = async (
       password: hashedPassword,
     },
   });
+
+  // Revoke ALL active DB sessions for user after password change
+  await prisma.userSession.updateMany({
+    where: {
+      userId,
+      revokedAt: null,
+    },
+    data: {
+      revokedAt: new Date(),
+    },
+  });
 };
 
 export const getUserSettings = async (

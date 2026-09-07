@@ -16,6 +16,7 @@ import {
   deleteMyAccount,
 } from "../services/user.service.js";
 import { sendSuccess } from "../utils/response.js";
+import { REFRESH_COOKIE_NAME } from "../utils/cookie.js";
 
 // ---------------------------------------------------------------------------
 // Profile Handlers
@@ -73,6 +74,7 @@ export const changePasswordHandler = async (
     const validatedData = changePasswordSchema.parse(req.body);
     await changePassword(userId, validatedData);
 
+    res.clearCookie(REFRESH_COOKIE_NAME, { path: "/api/auth" });
     sendSuccess(res, 200, "Password changed successfully");
   } catch (error) {
     next(error);
@@ -139,6 +141,7 @@ export const deleteMyAccountHandler = async (
     const validatedData = deleteAccountSchema.parse(req.body);
     await deleteMyAccount(userId, validatedData);
 
+    res.clearCookie(REFRESH_COOKIE_NAME, { path: "/api/auth" });
     sendSuccess(res, 200, "Account deleted successfully");
   } catch (error) {
     next(error);
