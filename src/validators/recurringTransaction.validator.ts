@@ -123,7 +123,9 @@ export const updateRecurringTransactionSchema = z
     }
   });
 
-export const recurringTransactionQuerySchema = z.object({
+import { paginationQuerySchema } from "./pagination.validator.js";
+
+export const recurringTransactionQuerySchema = paginationQuerySchema.extend({
   active: z
     .union([z.boolean(), z.string()])
     .optional()

@@ -30,10 +30,13 @@ export const updateCategorySchema = z
     }
   );
 
-export const queryCategorySchema = z.object({
+import { paginationQuerySchema } from "./pagination.validator.js";
+
+export const queryCategorySchema = paginationQuerySchema.extend({
   type: CategoryTypeEnum.optional(),
 });
 
 export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
 export type UpdateCategoryInput = z.infer<typeof updateCategorySchema>;
 export type QueryCategoryInput = z.infer<typeof queryCategorySchema>;
+

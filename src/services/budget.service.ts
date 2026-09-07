@@ -315,12 +315,49 @@ export const getBudgets = async (
     orderBy: [{ startDate: "desc" }, { createdAt: "desc" }],
   });
 
-  // Calculate spending for all budgets (parallel queries)
-  const spentAmounts = await Promise.all(
-    budgets.map((b) => calcSpent(userId, b))
+  if (budgets.length === 0) {
+    return [];
+  }
+
+  // Optimize N+1 DB calls by fetching transactions in a single batched date window
+  const minStartDate = new Date(
+    Math.min(...budgets.map((b) => b.startDate.getTime()))
+  );
+  const maxEndDate = new Date(
+    Math.max(...budgets.map((b) => b.endDate.getTime()))
   );
 
-  const formatted = budgets.map((b, i) => formatBudget(b, spentAmounts[i]!));
+  const transactions = await prisma.transaction.findMany({
+    where: {
+      userId,
+      type: "EXPENSE",
+      date: {
+        gte: minStartDate,
+        lte: maxEndDate,
+      },
+    },
+    select: {
+      amount: true,
+      categoryId: true,
+      date: true,
+    },
+  });
+
+  const formatted = budgets.map((b) => {
+    let spent = new Prisma.Decimal(0);
+    for (const tx of transactions) {
+      if (tx.date >= b.startDate && tx.date <= b.endDate) {
+        if (b.type === "CATEGORY") {
+          if (b.categoryId && tx.categoryId === b.categoryId) {
+            spent = spent.plus(tx.amount);
+          }
+        } else {
+          spent = spent.plus(tx.amount);
+        }
+      }
+    }
+    return formatBudget(b, spent);
+  });
 
   // Apply status filter after calculation (status is not stored)
   if (filters.status) {

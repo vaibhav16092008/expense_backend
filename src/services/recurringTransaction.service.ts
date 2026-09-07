@@ -219,10 +219,16 @@ export const createRecurringTransaction = async (
 // 2. Get Recurring Transactions (List & Filters)
 // ---------------------------------------------------------------------------
 
+import {
+  PaginatedResult,
+  getPaginationParams,
+  buildPaginationMeta,
+} from "../utils/pagination.js";
+
 export const getRecurringTransactions = async (
   userId: string,
   filters: RecurringTransactionQueryInput
-): Promise<RecurringTransactionResponse[]> => {
+): Promise<PaginatedResult<RecurringTransactionResponse>> => {
   const where: Prisma.RecurringTransactionWhereInput = { userId };
 
   if (filters.active !== undefined) {
@@ -254,13 +260,26 @@ export const getRecurringTransactions = async (
   const sortBy = filters.sortBy || "nextRunAt";
   const sortOrder = filters.sortOrder || "asc";
 
-  const list = await prisma.recurringTransaction.findMany({
-    where,
-    include: recurringInclude,
-    orderBy: { [sortBy]: sortOrder },
-  });
+  const { skip, take, page, limit } = getPaginationParams(
+    filters.page,
+    filters.limit
+  );
 
-  return list.map(formatRecurring);
+  const [totalCount, list] = await Promise.all([
+    prisma.recurringTransaction.count({ where }),
+    prisma.recurringTransaction.findMany({
+      where,
+      skip,
+      take,
+      include: recurringInclude,
+      orderBy: { [sortBy]: sortOrder },
+    }),
+  ]);
+
+  return {
+    data: list.map(formatRecurring),
+    pagination: buildPaginationMeta(page, limit, totalCount),
+  };
 };
 
 // ---------------------------------------------------------------------------

@@ -2,10 +2,13 @@ import app from "./app.js";
 import { env } from "./config/env.js";
 import { prisma } from "./config/prisma.js";
 
+import { startRecurringCron, stopRecurringCron } from "./jobs/recurringCron.js";
+
 const PORT = env.PORT;
 
 const server = app.listen(PORT, () => {
   console.log(`ExpenseIQ API running on port ${PORT}`);
+  startRecurringCron();
 });
 
 let isShuttingDown = false;
@@ -15,6 +18,7 @@ async function handleShutdown(signal: string, exitCode = 0): Promise<void> {
   isShuttingDown = true;
 
   console.log(`\n${signal} received. Initiating graceful shutdown...`);
+  stopRecurringCron();
 
   // Stop accepting new connections
   server.close(async (err) => {

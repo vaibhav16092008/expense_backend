@@ -21,7 +21,7 @@ import {
   completeGoal,
   getGoalSummary,
 } from "../services/goal.service.js";
-import { sendSuccess } from "../utils/response.js";
+import { sendSuccess, sendPaginatedSuccess } from "../utils/response.js";
 
 // ---------------------------------------------------------------------------
 // CRUD
@@ -55,9 +55,15 @@ export const listGoalsHandler = async (
     if (!userId) throw new AppError("Authentication required", 401);
 
     const query = goalQuerySchema.parse(req.query);
-    const goals = await listGoals(userId, query);
+    const result = await listGoals(userId, query);
 
-    sendSuccess(res, 200, "Goals fetched successfully", goals);
+    sendPaginatedSuccess(
+      res,
+      200,
+      "Goals fetched successfully",
+      result.data,
+      result.pagination
+    );
   } catch (error) {
     next(error);
   }

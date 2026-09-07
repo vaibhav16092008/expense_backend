@@ -13,7 +13,7 @@ import {
   updateCategory,
   deleteCategory,
 } from "../services/category.service.js";
-import { sendSuccess } from "../utils/response.js";
+import { sendSuccess, sendPaginatedSuccess } from "../utils/response.js";
 import { AppError } from "../middlewares/error.middleware.js";
 
 export const createCategoryHandler = async (
@@ -48,12 +48,15 @@ export const getCategoriesHandler = async (
     }
 
     const query = queryCategorySchema.parse(req.query);
-    const categories = await getCategories(
-      userId,
-      query.type as CategoryType | undefined
-    );
+    const result = await getCategories(userId, query);
 
-    sendSuccess(res, 200, "Categories fetched successfully", categories);
+    sendPaginatedSuccess(
+      res,
+      200,
+      "Categories fetched successfully",
+      result.data,
+      result.pagination
+    );
   } catch (error) {
     next(error);
   }

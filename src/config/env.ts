@@ -11,6 +11,12 @@ export const env = {
   JWT_REFRESH_EXPIRES_IN: process.env.JWT_REFRESH_EXPIRES_IN || "30d",
   NODE_ENV: process.env.NODE_ENV || "development",
   CORS_ORIGIN: process.env.CORS_ORIGIN || "http://localhost:3000",
+  CRON_RECURRING_ENABLED:
+    process.env.CRON_RECURRING_ENABLED !== undefined
+      ? process.env.CRON_RECURRING_ENABLED === "true"
+      : (process.env.NODE_ENV || "development") !== "test",
+  CRON_RECURRING_SCHEDULE:
+    process.env.CRON_RECURRING_SCHEDULE || "0 0 * * *",
 };
 
 /**

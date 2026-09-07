@@ -12,7 +12,7 @@ import {
   updateTransaction,
   deleteTransaction,
 } from "../services/transaction.service.js";
-import { sendSuccess } from "../utils/response.js";
+import { sendSuccess, sendPaginatedSuccess } from "../utils/response.js";
 import { AppError } from "../middlewares/error.middleware.js";
 
 export const createTransactionHandler = async (
@@ -47,9 +47,15 @@ export const getTransactionsHandler = async (
     }
 
     const query = transactionQuerySchema.parse(req.query);
-    const transactions = await getTransactions(userId, query);
+    const result = await getTransactions(userId, query);
 
-    sendSuccess(res, 200, "Transactions fetched successfully", transactions);
+    sendPaginatedSuccess(
+      res,
+      200,
+      "Transactions fetched successfully",
+      result.data,
+      result.pagination
+    );
   } catch (error) {
     next(error);
   }
@@ -111,6 +117,37 @@ export const deleteTransactionHandler = async (
     await deleteTransaction(userId, id);
 
     sendSuccess(res, 200, "Transaction deleted successfully");
+  } catch (error) {
+    next(error);
+  }
+};
+
+import { exportTransactionsStream } from "../services/transaction.service.js";
+
+export const exportTransactionsHandler = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      throw new AppError("Authentication required", 401);
+    }
+
+    const query = transactionQuerySchema.parse(req.query);
+    const today = new Date().toISOString().split("T")[0];
+
+    res.status(200);
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="expenseiq_transactions_${today}.csv"`
+    );
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+
+    await exportTransactionsStream(userId, query, res);
+    res.end();
   } catch (error) {
     next(error);
   }

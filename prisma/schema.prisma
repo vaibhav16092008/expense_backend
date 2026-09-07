@@ -153,6 +153,8 @@ model RecurringTransaction {
   @@index([userId, active])
   @@index([userId, nextRunAt])
   @@index([userId, categoryId])
+  @@index([active, nextRunAt])
+  @@index([userId, active, nextRunAt])
   @@map("recurring_transactions")
 }
 
@@ -211,6 +213,7 @@ model GoalContribution {
   @@index([goalId])
   @@index([userId])
   @@index([goalId, createdAt])
+  @@index([userId, goalId, createdAt])
   @@map("goal_contributions")
 }
 
