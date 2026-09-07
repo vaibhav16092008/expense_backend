@@ -12,6 +12,7 @@ import { goalRouter } from "./routes/goal.routes.js";
 import { dashboardRouter } from "./routes/dashboard.routes.js";
 import { recurringTransactionRouter } from "./routes/recurringTransaction.routes.js";
 import { userRouter } from "./routes/user.routes.js";
+import { reportRouter } from "./routes/report.routes.js";
 import { notFoundHandler, errorHandler } from "./middlewares/error.middleware.js";
 
 const app: Express = express();
@@ -54,6 +55,7 @@ app.use("/api/dashboard", dashboardRouter);
 app.use("/api/recurring-transactions", recurringTransactionRouter);
 app.use("/api/goals", goalRouter);
 app.use("/api/users", userRouter);
+app.use("/api/reports", reportRouter);
 
 // 6. 404 Handler
 app.use(notFoundHandler);
