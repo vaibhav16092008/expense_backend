@@ -15,7 +15,7 @@ import {
   resumeRecurringTransaction,
   processDueRecurringTransactions,
 } from "../services/recurringTransaction.service.js";
-import { sendSuccess } from "../utils/response.js";
+import { sendSuccess, sendPaginatedSuccess } from "../utils/response.js";
 import { AppError } from "../middlewares/error.middleware.js";
 
 export const createRecurringTransactionHandler = async (
@@ -51,13 +51,14 @@ export const getRecurringTransactionsHandler = async (
     if (!userId) throw new AppError("Authentication required", 401);
 
     const query = recurringTransactionQuerySchema.parse(req.query);
-    const list = await getRecurringTransactions(userId, query);
+    const result = await getRecurringTransactions(userId, query);
 
-    sendSuccess(
+    sendPaginatedSuccess(
       res,
       200,
       "Recurring transactions fetched successfully",
-      list
+      result.data,
+      result.pagination
     );
   } catch (error) {
     next(error);

@@ -112,7 +112,9 @@ export const contributionSchema = z.object({
 // Query / filter schema for listing goals
 // ---------------------------------------------------------------------------
 
-export const goalQuerySchema = z.object({
+import { paginationQuerySchema } from "./pagination.validator.js";
+
+export const goalQuerySchema = paginationQuerySchema.extend({
   status: GoalStatusEnum.optional(),
   search: z.string().trim().optional(),
   hasDeadline: z

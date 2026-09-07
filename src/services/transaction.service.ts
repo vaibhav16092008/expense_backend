@@ -100,10 +100,16 @@ export const createTransaction = async (
   return formatTransaction(transaction);
 };
 
+import {
+  PaginatedResult,
+  getPaginationParams,
+  buildPaginationMeta,
+} from "../utils/pagination.js";
+
 export const getTransactions = async (
   userId: string,
   filters: TransactionQueryInput
-): Promise<TransactionResponse[]> => {
+): Promise<PaginatedResult<TransactionResponse>> => {
   const where: Prisma.TransactionWhereInput = {
     userId,
   };
@@ -134,21 +140,34 @@ export const getTransactions = async (
     }
   }
 
-  const transactions = await prisma.transaction.findMany({
-    where,
-    include: {
-      category: {
-        select: {
-          id: true,
-          name: true,
-          type: true,
+  const { skip, take, page, limit } = getPaginationParams(
+    filters.page,
+    filters.limit
+  );
+
+  const [totalCount, transactions] = await Promise.all([
+    prisma.transaction.count({ where }),
+    prisma.transaction.findMany({
+      where,
+      skip,
+      take,
+      include: {
+        category: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+          },
         },
       },
-    },
-    orderBy: [{ date: "desc" }, { createdAt: "desc" }],
-  });
+      orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+    }),
+  ]);
 
-  return transactions.map(formatTransaction);
+  return {
+    data: transactions.map(formatTransaction),
+    pagination: buildPaginationMeta(page, limit, totalCount),
+  };
 };
 
 export const getTransactionById = async (
@@ -291,4 +310,84 @@ export const deleteTransaction = async (
   });
 
   return formatTransaction(transaction);
+};
+
+import { Writable } from "stream";
+import { formatCsvRow } from "../utils/csv.js";
+
+export const exportTransactionsStream = async (
+  userId: string,
+  filters: TransactionQueryInput,
+  writable: Writable
+): Promise<void> => {
+  const where: Prisma.TransactionWhereInput = {
+    userId,
+  };
+
+  if (filters.type) {
+    where.type = filters.type as TransactionType;
+  }
+
+  if (filters.categoryId) {
+    where.categoryId = filters.categoryId;
+  }
+
+  if (filters.startDate || filters.endDate) {
+    where.date = {};
+    if (filters.startDate) {
+      const start = new Date(filters.startDate);
+      if (filters.startDate.length === 10) {
+        start.setUTCHours(0, 0, 0, 0);
+      }
+      where.date.gte = start;
+    }
+    if (filters.endDate) {
+      const end = new Date(filters.endDate);
+      if (filters.endDate.length === 10) {
+        end.setUTCHours(23, 59, 59, 999);
+      }
+      where.date.lte = end;
+    }
+  }
+
+  // Write CSV Header
+  writable.write(formatCsvRow(["ID", "Date", "Type", "Category", "Amount", "Note"]));
+
+  const batchSize = 1000;
+  let skip = 0;
+
+  while (true) {
+    const batch = await prisma.transaction.findMany({
+      where,
+      skip,
+      take: batchSize,
+      include: {
+        category: {
+          select: {
+            name: true,
+          },
+        },
+      },
+      orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+    });
+
+    if (batch.length === 0) break;
+
+    for (const tx of batch) {
+      const dateStr = tx.date.toISOString().split("T")[0]; // YYYY-MM-DD
+      const amountStr = tx.amount.toFixed(2);
+      const row = formatCsvRow([
+        tx.id,
+        dateStr,
+        tx.type,
+        tx.category.name,
+        amountStr,
+        tx.note ?? "",
+      ]);
+      writable.write(row);
+    }
+
+    if (batch.length < batchSize) break;
+    skip += batchSize;
+  }
 };

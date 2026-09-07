@@ -146,10 +146,16 @@ export const createGoal = async (
   return enrichGoal(goal);
 };
 
+import {
+  PaginatedResult,
+  getPaginationParams,
+  buildPaginationMeta,
+} from "../utils/pagination.js";
+
 export const listGoals = async (
   userId: string,
   query: GoalQueryInput
-): Promise<GoalWithDerived[]> => {
+): Promise<PaginatedResult<GoalWithDerived>> => {
   // Build where clause
   const where: Prisma.FinancialGoalWhereInput = { userId };
 
@@ -175,12 +181,25 @@ export const listGoals = async (
   const sortField: SortField = (query.sortBy as SortField) ?? "createdAt";
   const sortOrder = query.sortOrder ?? "desc";
 
-  const goals = await prisma.financialGoal.findMany({
-    where,
-    orderBy: { [sortField]: sortOrder },
-  });
+  const { skip, take, page, limit } = getPaginationParams(
+    query.page,
+    query.limit
+  );
 
-  return goals.map(enrichGoal);
+  const [totalCount, goals] = await Promise.all([
+    prisma.financialGoal.count({ where }),
+    prisma.financialGoal.findMany({
+      where,
+      skip,
+      take,
+      orderBy: { [sortField]: sortOrder },
+    }),
+  ]);
+
+  return {
+    data: goals.map(enrichGoal),
+    pagination: buildPaginationMeta(page, limit, totalCount),
+  };
 };
 
 export const getGoal = async (

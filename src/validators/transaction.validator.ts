@@ -72,7 +72,9 @@ export const updateTransactionSchema = z
     }
   );
 
-export const transactionQuerySchema = z.object({
+import { paginationQuerySchema } from "./pagination.validator.js";
+
+export const transactionQuerySchema = paginationQuerySchema.extend({
   type: TransactionTypeEnum.optional(),
   categoryId: z.string().uuid("Invalid category ID").optional(),
   startDate: z
@@ -92,3 +94,4 @@ export const transactionQuerySchema = z.object({
 export type CreateTransactionInput = z.infer<typeof createTransactionSchema>;
 export type UpdateTransactionInput = z.infer<typeof updateTransactionSchema>;
 export type TransactionQueryInput = z.infer<typeof transactionQuerySchema>;
+

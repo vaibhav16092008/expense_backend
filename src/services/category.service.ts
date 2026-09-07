@@ -1,9 +1,15 @@
 import { Category, CategoryType } from "@prisma/client";
 import { prisma } from "../config/prisma.js";
 import {
+  QueryCategoryInput,
   CreateCategoryInput,
   UpdateCategoryInput,
 } from "../validators/category.validator.js";
+import {
+  PaginatedResult,
+  getPaginationParams,
+  buildPaginationMeta,
+} from "../utils/pagination.js";
 import { AppError } from "../middlewares/error.middleware.js";
 
 export const createCategory = async (
@@ -37,19 +43,34 @@ export const createCategory = async (
 
 export const getCategories = async (
   userId: string,
-  type?: CategoryType
-): Promise<Category[]> => {
-  const categories = await prisma.category.findMany({
-    where: {
-      userId,
-      ...(type ? { type } : {}),
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
-  });
+  query: QueryCategoryInput
+): Promise<PaginatedResult<Category>> => {
+  const where = {
+    userId,
+    ...(query.type ? { type: query.type as CategoryType } : {}),
+  };
 
-  return categories;
+  const { skip, take, page, limit } = getPaginationParams(
+    query.page,
+    query.limit
+  );
+
+  const [totalCount, categories] = await Promise.all([
+    prisma.category.count({ where }),
+    prisma.category.findMany({
+      where,
+      skip,
+      take,
+      orderBy: {
+        createdAt: "desc",
+      },
+    }),
+  ]);
+
+  return {
+    data: categories,
+    pagination: buildPaginationMeta(page, limit, totalCount),
+  };
 };
 
 export const getCategoryById = async (
