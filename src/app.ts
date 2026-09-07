@@ -1,6 +1,7 @@
 import express, { Express } from "express";
 import cors from "cors";
 import helmet from "helmet";
+import cookieParser from "cookie-parser";
 import { env } from "./config/env.js";
 import { healthRouter } from "./routes/health.routes.js";
 import { authRouter } from "./routes/auth.routes.js";
@@ -18,17 +19,32 @@ const app: Express = express();
 // 1. Security Headers Middleware
 app.use(helmet());
 
-// 2. Production-safe CORS Configuration
-const corsOptions = {
-  origin: env.CORS_ORIGIN === "*" ? "*" : env.CORS_ORIGIN.split(",").map((o) => o.trim()),
+// 2. Production-safe CORS Configuration with Credentials support
+const allowedOrigins =
+  env.CORS_ORIGIN === "*"
+    ? "*"
+    : env.CORS_ORIGIN.split(",").map((o) => o.trim());
+
+const corsOptions: cors.CorsOptions = {
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins === "*" || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  credentials: true,
 };
 app.use(cors(corsOptions));
 
-// 3. Request Body Size Limits
+// 3. Cookie Parser Middleware
+app.use(cookieParser());
+
+// 4. Request Body Size Limits
 app.use(express.json({ limit: "100kb" }));
 app.use(express.urlencoded({ extended: true, limit: "100kb" }));
 
-// 4. API Routes
+// 5. API Routes
 app.use("/api/health", healthRouter);
 app.use("/api/auth", authRouter);
 app.use("/api/categories", categoryRouter);
@@ -39,10 +55,10 @@ app.use("/api/recurring-transactions", recurringTransactionRouter);
 app.use("/api/goals", goalRouter);
 app.use("/api/users", userRouter);
 
-// 5. 404 Handler
+// 6. 404 Handler
 app.use(notFoundHandler);
 
-// 6. Global Error Handler
+// 7. Global Error Handler
 app.use(errorHandler);
 
 export default app;
