@@ -3,6 +3,18 @@ import { Response } from "express";
 import { sendError } from "../utils/response.js";
 
 /**
+ * Interface definition for rate limit store backends.
+ * Architectural Note:
+ * The current implementation uses in-memory storage suitable for single-instance deployments.
+ * When horizontally scaling across multiple instances, implement this interface using Redis (e.g. rate-limit-redis)
+ * and pass the custom store to express-rate-limit without modifying route definitions or middleware signatures.
+ */
+export interface IRateLimitStoreConfig {
+  windowMs: number;
+  max: number;
+}
+
+/**
  * Strict rate limiter for authentication endpoints (login & register).
  * Limits each IP to 10 requests per 15-minute window in production/development.
  * Skipped automatically in test environment unless x-enable-rate-limit header is present.

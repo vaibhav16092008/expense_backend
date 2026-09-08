@@ -28,8 +28,12 @@ export function validateEnv(
   jwtSecret: string = env.JWT_ACCESS_SECRET,
   dbUrl: string = env.DATABASE_URL
 ): void {
+  if (isNaN(env.PORT) || env.PORT <= 0 || env.PORT > 65535) {
+    throw new Error("FATAL CONFIG ERROR: PORT must be a valid port number between 1 and 65535.");
+  }
+
   if (environment === "production") {
-    if (!dbUrl.trim()) {
+    if (!dbUrl || !dbUrl.trim()) {
       throw new Error(
         "FATAL CONFIG ERROR: DATABASE_URL environment variable is required in production mode."
       );
