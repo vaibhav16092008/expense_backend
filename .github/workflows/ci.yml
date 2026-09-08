@@ -1,10 +1,11 @@
 name: ExpenseIQ Backend CI Pipeline
 
 on:
+  workflow_dispatch:
   push:
-    branches: [ "feature/test" ]
+    branches: [ main, master, "feature/**" ]
   pull_request:
-    branches: [ "feature/test" ]
+    branches: [ main, master ]
 
 jobs:
   build-and-test:
