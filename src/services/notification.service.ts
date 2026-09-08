@@ -39,6 +39,20 @@ export async function createNotificationIdempotent(data: {
   referenceId?: string;
   notificationKey: string;
 }): Promise<NotificationResponse | null> {
+  const existing = await prisma.notification.findUnique({
+    where: {
+      userId_type_notificationKey: {
+        userId: data.userId,
+        type: data.type,
+        notificationKey: data.notificationKey,
+      },
+    },
+  });
+
+  if (existing) {
+    return null;
+  }
+
   try {
     const created = await prisma.notification.create({
       data: {
@@ -58,7 +72,7 @@ export async function createNotificationIdempotent(data: {
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === "P2002"
     ) {
-      // Duplicate notification key for (userId, type, notificationKey) — safely skip
+      // Duplicate notification key race condition for (userId, type, notificationKey) — safely skip
       return null;
     }
     throw error;
