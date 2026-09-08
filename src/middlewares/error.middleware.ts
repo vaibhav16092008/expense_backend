@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { ZodError } from "zod";
 import { sendError } from "../utils/response.js";
+import { logger } from "../utils/logger.js";
 
 export class AppError extends Error {
   public statusCode: number;
@@ -18,7 +19,7 @@ export const notFoundHandler = (req: Request, res: Response): void => {
 
 export const errorHandler = (
   err: unknown,
-  _req: Request,
+  req: Request,
   res: Response,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _next: NextFunction
@@ -39,17 +40,25 @@ export const errorHandler = (
   if (
     err &&
     typeof err === "object" &&
-    ("type" in err && err.type === "entity.too.large" || "status" in err && (err as { status: number }).status === 413)
+    (("type" in err && (err as { type: string }).type === "entity.too.large") ||
+      ("status" in err && (err as { status: number }).status === 413))
   ) {
     sendError(res, 413, "Request body size exceeds 100kb limit");
     return;
   }
 
-  // Server internal logging (never exposed to client)
-  if (process.env.NODE_ENV !== "test") {
-    console.error("Unhandled Error:", err);
-  }
+  // Log unexpected errors internally using structured logger with correlation requestId
+  logger.error(
+    "UNHANDLED_ERROR",
+    err instanceof Error ? err.message : "An unexpected server error occurred",
+    err,
+    {
+      method: req.method,
+      url: req.originalUrl || req.url,
+    },
+    req.requestId
+  );
 
-  // Sanitize internal errors in production
+  // Return sanitized API response (never leak stack traces or internal secrets)
   sendError(res, 500, "Internal server error");
 };
