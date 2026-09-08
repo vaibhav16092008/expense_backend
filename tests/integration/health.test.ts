@@ -65,4 +65,24 @@ describe("Health, Liveness & Readiness Endpoints", () => {
       expect(typeof res.body.data.errorCount).toBe("number");
     });
   });
+
+  describe("GET /docs & GET /api/docs", () => {
+    it("200 — GET /docs serves the OpenAPI YAML specification", async () => {
+      const res = await api.get("/docs");
+      expect(res.status).toBe(200);
+      expect(res.headers["content-type"]).toContain("yaml");
+      expect(res.text).toContain("openapi: 3.0");
+      expect(res.text).toContain("/health");
+      expect(res.text).toContain("/api/auth/login");
+    });
+
+    it("200 — GET /api/docs serves the OpenAPI YAML specification", async () => {
+      const res = await api.get("/api/docs");
+      expect(res.status).toBe(200);
+      expect(res.headers["content-type"]).toContain("yaml");
+      expect(res.text).toContain("openapi: 3.0");
+      expect(res.text).toContain("/health");
+      expect(res.text).toContain("/api/auth/login");
+    });
+  });
 });

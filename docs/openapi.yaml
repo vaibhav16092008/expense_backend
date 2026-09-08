@@ -1,0 +1,1844 @@
+openapi: 3.0.3
+info:
+  title: ExpenseIQ Backend API
+  description: Production-grade REST API for ExpenseIQ Personal Finance Management Platform
+  version: 1.0.0
+servers:
+  - url: http://localhost:5000
+    description: Local Development Server
+paths:
+  /health:
+    get:
+      summary: Application Health Check
+      tags:
+        - Health & Operational
+      responses:
+        '200':
+          description: Application is healthy
+  /health/live:
+    get:
+      summary: Process Liveness Probe
+      tags:
+        - Health & Operational
+      responses:
+        '200':
+          description: Application process is alive
+  /health/ready:
+    get:
+      summary: Database Readiness Probe
+      tags:
+        - Health & Operational
+      responses:
+        '200':
+          description: Application is ready and database is connected
+        '503':
+          description: Database connectivity check failed or shutting down
+  /api/health/db:
+    get:
+      summary: Database Health Endpoint Alias
+      tags:
+        - Health & Operational
+      responses:
+        '200':
+          description: Application is ready and database is connected
+        '503':
+          description: Database connectivity check failed or shutting down
+  /metrics:
+    get:
+      summary: Operational Metrics
+      tags:
+        - Health & Operational
+      responses:
+        '200':
+          description: Returns uptime, request count, and error count
+  /docs:
+    get:
+      summary: Get OpenAPI Specification YAML
+      tags:
+        - Documentation
+      responses:
+        '200':
+          description: OpenAPI 3.0 specification in application/yaml format
+          content:
+            application/yaml:
+              schema:
+                type: string
+  /api/docs:
+    get:
+      summary: Get OpenAPI Specification YAML Alias
+      tags:
+        - Documentation
+      responses:
+        '200':
+          description: OpenAPI 3.0 specification in application/yaml format
+          content:
+            application/yaml:
+              schema:
+                type: string
+
+  # ---------------------------------------------------------------------------
+  # Authentication Endpoints
+  # ---------------------------------------------------------------------------
+  /api/auth/register:
+    post:
+      summary: User Registration
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, name]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+                name:
+                  type: string
+      responses:
+        '201':
+          description: User registered successfully
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+
+  /api/auth/login:
+    post:
+      summary: User Login
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Authenticated successfully. Access token returned in JSON payload, refresh token set in HTTP-only cookie.
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+
+  /api/auth/refresh:
+    post:
+      summary: Refresh Access Token
+      tags:
+        - Authentication
+      description: Uses HTTP-only refreshToken cookie to issue a new access token and rotated refresh cookie.
+      responses:
+        '200':
+          description: Access token refreshed successfully
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /api/auth/logout:
+    post:
+      summary: Logout Session
+      tags:
+        - Authentication
+      responses:
+        '200':
+          description: Current user session revoked and refresh cookie cleared
+
+  /api/auth/logout-all:
+    post:
+      summary: Revoke All User Sessions
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: All sessions for the current user revoked
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /api/auth/me:
+    get:
+      summary: Get Current Session Profile
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Returns current authenticated user information
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  # ---------------------------------------------------------------------------
+  # Users & Profile Endpoints
+  # ---------------------------------------------------------------------------
+  /api/users/me:
+    get:
+      summary: Get User Profile
+      tags:
+        - Users
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Detailed profile information of authenticated user
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+    patch:
+      summary: Update User Profile
+      tags:
+        - Users
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                  format: email
+      responses:
+        '200':
+          description: Profile updated successfully
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+    delete:
+      summary: Delete My Account
+      tags:
+        - Users
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password:
+                  type: string
+      responses:
+        '200':
+          description: User account and all associated resources permanently deleted
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /api/users/me/password:
+    patch:
+      summary: Change Password
+      tags:
+        - Users
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword:
+                  type: string
+                newPassword:
+                  type: string
+                  minLength: 8
+      responses:
+        '200':
+          description: Password updated successfully
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /api/users/settings:
+    get:
+      summary: Get User Settings
+      tags:
+        - Users
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User preferences and configuration settings
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+    patch:
+      summary: Update User Settings
+      tags:
+        - Users
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                currency:
+                  type: string
+                  enum: [INR, USD, EUR, GBP, AED]
+                monthlyBudgetEnabled:
+                  type: boolean
+                monthlyBudgetAmount:
+                  type: number
+                budgetAlertsEnabled:
+                  type: boolean
+                recurringRemindersEnabled:
+                  type: boolean
+                goalRemindersEnabled:
+                  type: boolean
+                monthlySummaryEnabled:
+                  type: boolean
+                theme:
+                  type: string
+                  enum: [SYSTEM, LIGHT, DARK]
+      responses:
+        '200':
+          description: User settings updated successfully
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  # ---------------------------------------------------------------------------
+  # Categories Endpoints
+  # ---------------------------------------------------------------------------
+  /api/categories:
+    get:
+      summary: List Categories
+      tags:
+        - Categories
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum: [EXPENSE, INCOME]
+      responses:
+        '200':
+          description: List of user categories
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+    post:
+      summary: Create Category
+      tags:
+        - Categories
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, type]
+              properties:
+                name:
+                  type: string
+                type:
+                  type: string
+                  enum: [EXPENSE, INCOME]
+                color:
+                  type: string
+                icon:
+                  type: string
+      responses:
+        '201':
+          description: Category created successfully
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+
+  /api/categories/{id}:
+    get:
+      summary: Get Category Details
+      tags:
+        - Categories
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Category details
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    patch:
+      summary: Update Category
+      tags:
+        - Categories
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                type:
+                  type: string
+                  enum: [EXPENSE, INCOME]
+                color:
+                  type: string
+                icon:
+                  type: string
+      responses:
+        '200':
+          description: Category updated successfully
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    delete:
+      summary: Delete Category
+      tags:
+        - Categories
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Category deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  # ---------------------------------------------------------------------------
+  # Transactions Endpoints
+  # ---------------------------------------------------------------------------
+  /api/transactions:
+    get:
+      summary: List Transactions (Paginated, Filtered)
+      tags:
+        - Transactions
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum: [EXPENSE, INCOME]
+        - in: query
+          name: categoryId
+          schema:
+            type: string
+        - in: query
+          name: startDate
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: endDate
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: search
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paginated list of user transactions
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+    post:
+      summary: Create Transaction
+      tags:
+        - Transactions
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount, type, categoryId, date]
+              properties:
+                amount:
+                  type: number
+                  minimum: 0.01
+                type:
+                  type: string
+                  enum: [EXPENSE, INCOME]
+                categoryId:
+                  type: string
+                date:
+                  type: string
+                  format: date
+                note:
+                  type: string
+                merchant:
+                  type: string
+      responses:
+        '201':
+          description: Transaction created successfully
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /api/transactions/export:
+    get:
+      summary: Export Transactions to CSV
+      tags:
+        - Transactions
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: startDate
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: endDate
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: categoryId
+          schema:
+            type: string
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum: [EXPENSE, INCOME]
+      responses:
+        '200':
+          description: CSV file containing filtered transactions
+          content:
+            text/csv:
+              schema:
+                type: string
+
+  /api/transactions/{id}:
+    get:
+      summary: Get Transaction Details
+      tags:
+        - Transactions
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Transaction details
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    patch:
+      summary: Update Transaction
+      tags:
+        - Transactions
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:
+                  type: number
+                  minimum: 0.01
+                type:
+                  type: string
+                  enum: [EXPENSE, INCOME]
+                categoryId:
+                  type: string
+                date:
+                  type: string
+                  format: date
+                note:
+                  type: string
+                merchant:
+                  type: string
+      responses:
+        '200':
+          description: Transaction updated successfully
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    delete:
+      summary: Delete Transaction
+      tags:
+        - Transactions
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Transaction deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  # ---------------------------------------------------------------------------
+  # Budgets Endpoints
+  # ---------------------------------------------------------------------------
+  /api/budgets:
+    get:
+      summary: List Budgets
+      tags:
+        - Budgets
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: period
+          schema:
+            type: string
+            enum: [MONTHLY, QUARTERLY, YEARLY, CUSTOM]
+        - in: query
+          name: categoryId
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of user budgets with calculate progress
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+    post:
+      summary: Create Budget
+      tags:
+        - Budgets
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount, type, period, startDate, endDate]
+              properties:
+                amount:
+                  type: number
+                  minimum: 0.01
+                type:
+                  type: string
+                  enum: [CATEGORY, OVERALL]
+                period:
+                  type: string
+                  enum: [MONTHLY, QUARTERLY, YEARLY, CUSTOM]
+                categoryId:
+                  type: string
+                startDate:
+                  type: string
+                  format: date
+                endDate:
+                  type: string
+                  format: date
+      responses:
+        '201':
+          description: Budget created successfully
+        '400':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/budgets/{id}:
+    get:
+      summary: Get Budget Details
+      tags:
+        - Budgets
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Detailed budget with progress metrics
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    patch:
+      summary: Update Budget
+      tags:
+        - Budgets
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:
+                  type: number
+                  minimum: 0.01
+                startDate:
+                  type: string
+                  format: date
+                endDate:
+                  type: string
+                  format: date
+      responses:
+        '200':
+          description: Budget updated successfully
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    delete:
+      summary: Delete Budget
+      tags:
+        - Budgets
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Budget deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  # ---------------------------------------------------------------------------
+  # Dashboard Analytics Endpoints
+  # ---------------------------------------------------------------------------
+  /api/dashboard/summary:
+    get:
+      summary: Get Dashboard Financial Summary
+      tags:
+        - Dashboard
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: High-level financial metrics (total income, total expense, net savings)
+
+  /api/dashboard/monthly:
+    get:
+      summary: Get Monthly Analytics
+      tags:
+        - Dashboard
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: months
+          schema:
+            type: integer
+            default: 6
+      responses:
+        '200':
+          description: Month-over-month financial breakdown
+
+  /api/dashboard/categories:
+    get:
+      summary: Get Category Spending Analytics
+      tags:
+        - Dashboard
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Category breakdown with percentage share
+
+  /api/dashboard/trends:
+    get:
+      summary: Get Spending Trends
+      tags:
+        - Dashboard
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Daily/weekly spending trends data
+
+  /api/dashboard/budget-overview:
+    get:
+      summary: Get Budget Overview Dashboard
+      tags:
+        - Dashboard
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Comprehensive budget status overview
+
+  # ---------------------------------------------------------------------------
+  # Recurring Transactions Endpoints
+  # ---------------------------------------------------------------------------
+  /api/recurring-transactions:
+    get:
+      summary: List Recurring Transactions
+      tags:
+        - Recurring Transactions
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of active and paused recurring transaction rules
+    post:
+      summary: Create Recurring Transaction Rule
+      tags:
+        - Recurring Transactions
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount, type, categoryId, frequency, startDate]
+              properties:
+                amount:
+                  type: number
+                  minimum: 0.01
+                type:
+                  type: string
+                  enum: [EXPENSE, INCOME]
+                categoryId:
+                  type: string
+                frequency:
+                  type: string
+                  enum: [DAILY, WEEKLY, MONTHLY, YEARLY]
+                startDate:
+                  type: string
+                  format: date
+                note:
+                  type: string
+      responses:
+        '201':
+          description: Recurring transaction rule created
+
+  /api/recurring-transactions/process:
+    post:
+      summary: Trigger Manual Process of Due Recurring Transactions
+      tags:
+        - Recurring Transactions
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Summary of generated transactions and processed schedules
+
+  /api/recurring-transactions/{id}:
+    get:
+      summary: Get Recurring Transaction Rule Details
+      tags:
+        - Recurring Transactions
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Recurring transaction details
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    patch:
+      summary: Update Recurring Transaction Rule
+      tags:
+        - Recurring Transactions
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:
+                  type: number
+                  minimum: 0.01
+                frequency:
+                  type: string
+                  enum: [DAILY, WEEKLY, MONTHLY, YEARLY]
+                note:
+                  type: string
+      responses:
+        '200':
+          description: Recurring transaction rule updated
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    delete:
+      summary: Delete Recurring Transaction Rule
+      tags:
+        - Recurring Transactions
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Recurring transaction rule deleted
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /api/recurring-transactions/{id}/pause:
+    post:
+      summary: Pause Recurring Transaction Rule
+      tags:
+        - Recurring Transactions
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Recurring schedule paused
+
+  /api/recurring-transactions/{id}/resume:
+    post:
+      summary: Resume Recurring Transaction Rule
+      tags:
+        - Recurring Transactions
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Recurring schedule resumed
+
+  # ---------------------------------------------------------------------------
+  # Financial Goals Endpoints
+  # ---------------------------------------------------------------------------
+  /api/goals/summary:
+    get:
+      summary: Get Financial Goals Summary
+      tags:
+        - Financial Goals
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Aggregated goal summary metrics
+
+  /api/goals:
+    get:
+      summary: List Financial Goals
+      tags:
+        - Financial Goals
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [ACTIVE, COMPLETED, PAUSED, CANCELLED]
+      responses:
+        '200':
+          description: List of financial goals
+    post:
+      summary: Create Financial Goal
+      tags:
+        - Financial Goals
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, targetAmount]
+              properties:
+                name:
+                  type: string
+                targetAmount:
+                  type: number
+                  minimum: 0.01
+                deadline:
+                  type: string
+                  format: date
+      responses:
+        '201':
+          description: Financial goal created
+
+  /api/goals/{id}:
+    get:
+      summary: Get Financial Goal Details
+      tags:
+        - Financial Goals
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Goal details
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    patch:
+      summary: Update Financial Goal
+      tags:
+        - Financial Goals
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                targetAmount:
+                  type: number
+                  minimum: 0.01
+                deadline:
+                  type: string
+                  format: date
+      responses:
+        '200':
+          description: Goal updated successfully
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    delete:
+      summary: Delete Financial Goal
+      tags:
+        - Financial Goals
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Goal deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /api/goals/{id}/pause:
+    post:
+      summary: Pause Financial Goal
+      tags:
+        - Financial Goals
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Goal status changed to PAUSED
+
+  /api/goals/{id}/resume:
+    post:
+      summary: Resume Financial Goal
+      tags:
+        - Financial Goals
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Goal status restored to ACTIVE
+
+  /api/goals/{id}/complete:
+    post:
+      summary: Mark Financial Goal as Completed
+      tags:
+        - Financial Goals
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Goal status marked COMPLETED
+
+  /api/goals/{id}/contributions:
+    get:
+      summary: List Goal Contributions
+      tags:
+        - Financial Goals
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Contributions list for goal
+    post:
+      summary: Add Contribution to Goal
+      tags:
+        - Financial Goals
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount]
+              properties:
+                amount:
+                  type: number
+                  minimum: 0.01
+                note:
+                  type: string
+      responses:
+        '201':
+          description: Contribution added to goal
+
+  /api/goals/{goalId}/contributions/{contributionId}:
+    delete:
+      summary: Delete Goal Contribution
+      tags:
+        - Financial Goals
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: goalId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: contributionId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Contribution deleted and current goal amount updated
+
+  # ---------------------------------------------------------------------------
+  # Financial Reports Endpoints
+  # ---------------------------------------------------------------------------
+  /api/reports/summary:
+    get:
+      summary: Get Financial Summary Report
+      tags:
+        - Reports
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: startDate
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: endDate
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Summary financial report
+
+  /api/reports/cash-flow:
+    get:
+      summary: Get Cash Flow Report
+      tags:
+        - Reports
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: startDate
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: endDate
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Cash flow breakdown report
+
+  /api/reports/categories:
+    get:
+      summary: Get Category Breakdown Report
+      tags:
+        - Reports
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: startDate
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: endDate
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Category expense/income breakdown report
+
+  /api/reports/budgets:
+    get:
+      summary: Get Budget Performance Report
+      tags:
+        - Reports
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Budget vs actual spending performance report
+
+  /api/reports/savings:
+    get:
+      summary: Get Savings & Goals Report
+      tags:
+        - Reports
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Savings rate and financial goals report
+
+  /api/reports/custom:
+    get:
+      summary: Get Custom Date Range Financial Report
+      tags:
+        - Reports
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: startDate
+          required: true
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: endDate
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Custom range financial report
+
+  # ---------------------------------------------------------------------------
+  # Data Exports Endpoints
+  # ---------------------------------------------------------------------------
+  /api/exports/transactions:
+    get:
+      summary: Export Raw Transactions (CSV or JSON)
+      tags:
+        - Data Exports
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: format
+          schema:
+            type: string
+            enum: [csv, json]
+            default: csv
+        - in: query
+          name: startDate
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: endDate
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Transactions export file payload
+
+  /api/exports/reports:
+    get:
+      summary: Export Formatted Financial Reports (JSON)
+      tags:
+        - Data Exports
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: reportType
+          schema:
+            type: string
+            enum: [summary, cash-flow, categories, budgets, savings]
+      responses:
+        '200':
+          description: Formatted report export payload
+
+  /api/exports/financial:
+    get:
+      summary: Export Full Financial Data Snapshot (JSON)
+      tags:
+        - Data Exports
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Full user backup snapshot (categories, transactions, budgets, goals, settings)
+
+  # ---------------------------------------------------------------------------
+  # Notifications Endpoints
+  # ---------------------------------------------------------------------------
+  /api/notifications:
+    get:
+      summary: List Notifications (Paginated, Filtered)
+      tags:
+        - Notifications
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+        - in: query
+          name: unreadOnly
+          schema:
+            type: boolean
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum:
+              - BUDGET_WARNING
+              - BUDGET_CRITICAL
+              - BUDGET_EXCEEDED
+              - RECURRING_UPCOMING
+              - RECURRING_DUE
+              - GOAL_DEADLINE
+              - GOAL_PROGRESS
+              - MONTHLY_SUMMARY
+      responses:
+        '200':
+          description: Paginated notifications list
+
+  /api/notifications/unread-count:
+    get:
+      summary: Get Unread Notification Count
+      tags:
+        - Notifications
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Unread notification count
+
+  /api/notifications/read-all:
+    patch:
+      summary: Mark All Notifications as Read
+      tags:
+        - Notifications
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Count of notifications marked read
+
+  /api/notifications/{id}/read:
+    patch:
+      summary: Mark Single Notification as Read
+      tags:
+        - Notifications
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Notification marked read
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /api/notifications/{id}:
+    delete:
+      summary: Delete Notification
+      tags:
+        - Notifications
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Notification deleted
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+# ---------------------------------------------------------------------------
+# Reusable Schemas & Responses
+# ---------------------------------------------------------------------------
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    UserSettings:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        currency:
+          type: string
+          enum: [INR, USD, EUR, GBP, AED]
+        monthlyBudgetEnabled:
+          type: boolean
+        monthlyBudgetAmount:
+          type: number
+          nullable: true
+        budgetAlertsEnabled:
+          type: boolean
+        recurringRemindersEnabled:
+          type: boolean
+        goalRemindersEnabled:
+          type: boolean
+        monthlySummaryEnabled:
+          type: boolean
+        theme:
+          type: string
+          enum: [SYSTEM, LIGHT, DARK]
+
+    Category:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum: [EXPENSE, INCOME]
+        color:
+          type: string
+          nullable: true
+        icon:
+          type: string
+          nullable: true
+
+    Transaction:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        amount:
+          type: number
+        type:
+          type: string
+          enum: [EXPENSE, INCOME]
+        categoryId:
+          type: string
+        date:
+          type: string
+          format: date-time
+        note:
+          type: string
+          nullable: true
+        merchant:
+          type: string
+          nullable: true
+
+    Budget:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        amount:
+          type: number
+        type:
+          type: string
+          enum: [CATEGORY, OVERALL]
+        period:
+          type: string
+          enum: [MONTHLY, QUARTERLY, YEARLY, CUSTOM]
+        categoryId:
+          type: string
+          nullable: true
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+
+    RecurringTransaction:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        amount:
+          type: number
+        type:
+          type: string
+          enum: [EXPENSE, INCOME]
+        categoryId:
+          type: string
+        frequency:
+          type: string
+          enum: [DAILY, WEEKLY, MONTHLY, YEARLY]
+        startDate:
+          type: string
+          format: date-time
+        nextRunAt:
+          type: string
+          format: date-time
+        active:
+          type: boolean
+
+    Goal:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        name:
+          type: string
+        targetAmount:
+          type: number
+        currentAmount:
+          type: number
+        deadline:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          type: string
+          enum: [ACTIVE, COMPLETED, PAUSED, CANCELLED]
+
+    GoalContribution:
+      type: object
+      properties:
+        id:
+          type: string
+        goalId:
+          type: string
+        userId:
+          type: string
+        amount:
+          type: number
+        note:
+          type: string
+          nullable: true
+        type:
+          type: string
+          enum: [MANUAL, AUTOMATED]
+        createdAt:
+          type: string
+          format: date-time
+
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        type:
+          type: string
+          enum:
+            - BUDGET_WARNING
+            - BUDGET_CRITICAL
+            - BUDGET_EXCEEDED
+            - RECURRING_UPCOMING
+            - RECURRING_DUE
+            - GOAL_DEADLINE
+            - GOAL_PROGRESS
+            - MONTHLY_SUMMARY
+        title:
+          type: string
+        message:
+          type: string
+        severity:
+          type: string
+          enum: [INFO, WARNING, CRITICAL]
+        isRead:
+          type: boolean
+        notificationKey:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+  responses:
+    ValidationError:
+      description: Bad Request / Input Validation Failed
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              error:
+                type: object
+                properties:
+                  code:
+                    type: string
+                    example: VALIDATION_ERROR
+                  message:
+                    type: string
+                    example: Input validation failed
+
+    UnauthorizedError:
+      description: Authentication Required / Invalid Token
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              error:
+                type: object
+                properties:
+                  code:
+                    type: string
+                    example: UNAUTHORIZED
+                  message:
+                    type: string
+                    example: Authentication token missing or invalid
+
+    NotFoundError:
+      description: Resource Not Found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              error:
+                type: object
+                properties:
+                  code:
+                    type: string
+                    example: NOT_FOUND
+                  message:
+                    type: string
+                    example: Requested resource not found
+
+    ConflictError:
+      description: Resource Conflict / Duplicate Unique Constraint
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              error:
+                type: object
+                properties:
+                  code:
+                    type: string
+                    example: CONFLICT
+                  message:
+                    type: string
+                    example: Resource already exists
+
+    RateLimitError:
+      description: Too Many Requests / Rate Limit Exceeded
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              error:
+                type: object
+                properties:
+                  code:
+                    type: string
+                    example: TOO_MANY_REQUESTS
+                  message:
+                    type: string
+                    example: Rate limit exceeded, try again later

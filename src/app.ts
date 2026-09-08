@@ -7,7 +7,7 @@ import { requestIdMiddleware } from "./middlewares/requestId.middleware.js";
 import { requestLoggerMiddleware } from "./middlewares/requestLogger.middleware.js";
 import { securityHeadersMiddleware } from "./middlewares/securityHeaders.middleware.js";
 import { healthRouter } from "./routes/health.routes.js";
-import { getMetrics } from "./controllers/health.controller.js";
+import { getMetrics, getApiDocsInfo } from "./controllers/health.controller.js";
 import { authRouter } from "./routes/auth.routes.js";
 import { categoryRouter } from "./routes/category.routes.js";
 import { transactionRouter } from "./routes/transaction.routes.js";
@@ -56,11 +56,13 @@ app.use(cookieParser());
 app.use(express.json({ limit: "100kb" }));
 app.use(express.urlencoded({ extended: true, limit: "100kb" }));
 
-// 6. Health & Metrics Routes (accessible at root and /api prefixes)
+// 6. Health, Metrics & Documentation Routes (accessible at root and /api prefixes)
 app.use("/health", healthRouter);
 app.use("/api/health", healthRouter);
 app.get("/metrics", getMetrics);
 app.get("/api/metrics", getMetrics);
+app.get("/docs", getApiDocsInfo);
+app.get("/api/docs", getApiDocsInfo);
 
 // 7. Core Business API Routes
 app.use("/api/auth", authRouter);
