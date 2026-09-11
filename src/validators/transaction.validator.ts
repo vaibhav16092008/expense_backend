@@ -43,6 +43,10 @@ export const createTransactionSchema = z.object({
     .refine((val) => !isNaN(Date.parse(val)), {
       message: "Invalid transaction date",
     }),
+  clientRequestId: z
+    .string()
+    .uuid("Invalid clientRequestId UUID format")
+    .optional(),
 });
 
 export const updateTransactionSchema = z

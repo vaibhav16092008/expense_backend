@@ -528,7 +528,13 @@ paths:
                   type: string
                 merchant:
                   type: string
+                clientRequestId:
+                  type: string
+                  format: uuid
+                  description: Optional client-generated UUID for request idempotency during offline sync retries
       responses:
+        '200':
+          description: Transaction already exists (idempotent duplicate request)
         '201':
           description: Transaction created successfully
         '400':

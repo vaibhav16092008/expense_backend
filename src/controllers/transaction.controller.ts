@@ -27,9 +27,13 @@ export const createTransactionHandler = async (
     }
 
     const validatedData = createTransactionSchema.parse(req.body);
-    const transaction = await createTransaction(userId, validatedData);
+    const result = await createTransaction(userId, validatedData);
 
-    sendSuccess(res, 201, "Transaction created successfully", transaction);
+    if (result.isDuplicate) {
+      sendSuccess(res, 200, "Transaction already exists", result.transaction);
+    } else {
+      sendSuccess(res, 201, "Transaction created successfully", result.transaction);
+    }
   } catch (error) {
     next(error);
   }
