@@ -82,6 +82,7 @@ model Transaction {
   type                   TransactionType
   note                   String?
   date                   DateTime
+  clientRequestId        String?
 
   userId                 String
   categoryId             String
@@ -96,6 +97,7 @@ model Transaction {
   updatedAt              DateTime              @updatedAt
 
   @@unique([recurringTransactionId, recurringOccurrenceAt])
+  @@unique([userId, clientRequestId])
   @@index([userId])
   @@index([userId, date])
   @@index([userId, type])

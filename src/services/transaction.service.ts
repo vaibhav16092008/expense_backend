@@ -52,11 +52,44 @@ const formatTransaction = (
   updatedAt: transaction.updatedAt,
 });
 
+export interface CreateTransactionResult {
+  transaction: TransactionResponse;
+  isDuplicate: boolean;
+}
+
 export const createTransaction = async (
   userId: string,
   input: CreateTransactionInput
-): Promise<TransactionResponse> => {
-  // 1. Verify category exists and belongs to the authenticated user
+): Promise<CreateTransactionResult> => {
+  // 1. Fast-path Idempotency Check: if clientRequestId is provided, check existing transaction via compound unique key
+  if (input.clientRequestId) {
+    const existing = await prisma.transaction.findUnique({
+      where: {
+        userId_clientRequestId: {
+          userId,
+          clientRequestId: input.clientRequestId,
+        },
+      },
+      include: {
+        category: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+          },
+        },
+      },
+    });
+
+    if (existing) {
+      return {
+        transaction: formatTransaction(existing),
+        isDuplicate: true,
+      };
+    }
+  }
+
+  // 2. Verify category exists and belongs to the authenticated user
   const category = await prisma.category.findFirst({
     where: {
       id: input.categoryId,
@@ -68,7 +101,7 @@ export const createTransaction = async (
     throw new AppError("Category not found", 404);
   }
 
-  // 2. Verify transaction type matches category type
+  // 3. Verify transaction type matches category type
   if (category.type !== (input.type as unknown as CategoryType)) {
     throw new AppError(
       "Transaction type does not match category type",
@@ -76,28 +109,77 @@ export const createTransaction = async (
     );
   }
 
-  // 3. Create transaction
-  const transaction = await prisma.transaction.create({
-    data: {
-      amount: new Prisma.Decimal(input.amount),
-      type: input.type as TransactionType,
-      categoryId: input.categoryId,
-      note: input.note ? input.note.trim() : null,
-      date: new Date(input.date),
-      userId,
-    },
-    include: {
-      category: {
-        select: {
-          id: true,
-          name: true,
-          type: true,
+  // 4. Create transaction (handled with atomic DB unique constraint safety)
+  try {
+    const transaction = await prisma.transaction.create({
+      data: {
+        amount: new Prisma.Decimal(input.amount),
+        type: input.type as TransactionType,
+        categoryId: input.categoryId,
+        note: input.note ? input.note.trim() : null,
+        date: new Date(input.date),
+        clientRequestId: input.clientRequestId || null,
+        userId,
+      },
+      include: {
+        category: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+          },
         },
       },
-    },
-  });
+    });
 
-  return formatTransaction(transaction);
+    return {
+      transaction: formatTransaction(transaction),
+      isDuplicate: false,
+    };
+  } catch (error) {
+    // Handle race condition: concurrent creation with identical (userId, clientRequestId)
+    if (
+      input.clientRequestId &&
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      const target = error.meta?.target;
+      const isTargetConstraint = Array.isArray(target)
+        ? target.includes("clientRequestId")
+        : typeof target === "string"
+        ? target.includes("clientRequestId")
+        : true; // fallback to true for P2002 with clientRequestId present
+
+      if (isTargetConstraint) {
+        const existing = await prisma.transaction.findUnique({
+          where: {
+            userId_clientRequestId: {
+              userId,
+              clientRequestId: input.clientRequestId,
+            },
+          },
+          include: {
+            category: {
+              select: {
+                id: true,
+                name: true,
+                type: true,
+              },
+            },
+          },
+        });
+
+        if (existing) {
+          return {
+            transaction: formatTransaction(existing),
+            isDuplicate: true,
+          };
+        }
+      }
+    }
+
+    throw error;
+  }
 };
 
 import {

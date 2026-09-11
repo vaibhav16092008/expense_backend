@@ -3,6 +3,7 @@
  * Tests: GET/POST /api/transactions, GET/PATCH/DELETE /api/transactions/:id
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { prisma } from "../../src/config/prisma.js";
 import {
   api,
   createTestUser,
@@ -475,5 +476,161 @@ describe("Transactions — DELETE /api/transactions/:id", () => {
   it("401 — unauthenticated request is rejected", async () => {
     const res = await api.delete("/api/transactions/some-id");
     expect(res.status).toBe(401);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Idempotency Tests
+// ---------------------------------------------------------------------------
+
+describe("Transactions — POST /api/transactions (Idempotency)", () => {
+  const CLIENT_KEY_1 = "11111111-1111-4111-8111-111111111111";
+  const CLIENT_KEY_2 = "22222222-2222-4222-8222-222222222222";
+
+  it("201 — first request with clientRequestId creates transaction", async () => {
+    const res = await authPost(userA.token, "/api/transactions", {
+      amount: 150.00,
+      type: "EXPENSE",
+      categoryId: expenseCatId,
+      date: DATE,
+      note: "Original expense",
+      clientRequestId: CLIENT_KEY_1,
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body.success).toBe(true);
+    expect(res.body.message).toBe("Transaction created successfully");
+    expect(res.body.data.id).toBeDefined();
+    expect(res.body.data.amount).toBe("150.00");
+  });
+
+  it("200 — repeated request with same clientRequestId returns existing transaction without creating duplicate", async () => {
+    const res1 = await authPost(userA.token, "/api/transactions", {
+      amount: 150.00,
+      type: "EXPENSE",
+      categoryId: expenseCatId,
+      date: DATE,
+      note: "Original expense",
+      clientRequestId: CLIENT_KEY_1,
+    });
+
+    expect(res1.status).toBe(200);
+    expect(res1.body.success).toBe(true);
+    expect(res1.body.message).toBe("Transaction already exists");
+
+    // Verify exactly 1 database record exists for userA + CLIENT_KEY_1
+    const count = await prisma.transaction.count({
+      where: {
+        userId: userA.id,
+        clientRequestId: CLIENT_KEY_1,
+      },
+    });
+    expect(count).toBe(1);
+  });
+
+  it("200 — repeated request with different payload returns existing original transaction unmodified", async () => {
+    const res = await authPost(userA.token, "/api/transactions", {
+      amount: 9999.99, // Attempted different amount
+      type: "EXPENSE",
+      categoryId: expenseCatId,
+      date: "2026-12-31", // Attempted different date
+      note: "Modified note payload",
+      clientRequestId: CLIENT_KEY_1,
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.amount).toBe("150.00"); // Preserves original amount
+    expect(res.body.data.note).toBe("Original expense"); // Preserves original note
+  });
+
+  it("200/201 — concurrent requests (4 simultaneous requests) with same key produce exactly 1 DB transaction", async () => {
+    const CONCURRENT_KEY = "33333333-3333-4333-8333-333333333333";
+    const payload = {
+      amount: 75.50,
+      type: "EXPENSE",
+      categoryId: expenseCatId,
+      date: DATE,
+      note: "Concurrent test",
+      clientRequestId: CONCURRENT_KEY,
+    };
+
+    // Send 4 concurrent POST requests simultaneously
+    const responses = await Promise.all([
+      authPost(userA.token, "/api/transactions", payload),
+      authPost(userA.token, "/api/transactions", payload),
+      authPost(userA.token, "/api/transactions", payload),
+      authPost(userA.token, "/api/transactions", payload),
+    ]);
+
+    // All responses must succeed (status 200 or 201)
+    responses.forEach((res) => {
+      expect([200, 201]).toContain(res.status);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.amount).toBe("75.50");
+    });
+
+    // All 4 responses must reference the EXACT SAME transaction ID
+    const transactionIds = responses.map((r) => r.body.data.id);
+    const uniqueIds = Array.from(new Set(transactionIds));
+    expect(uniqueIds.length).toBe(1);
+
+    // Exactly 1 database record must exist in PostgreSQL
+    const count = await prisma.transaction.count({
+      where: {
+        userId: userA.id,
+        clientRequestId: CONCURRENT_KEY,
+      },
+    });
+    expect(count).toBe(1);
+  });
+
+  it("201 — User B can use the same clientRequestId string independently (user-scoped uniqueness)", async () => {
+    const resA = await authPost(userA.token, "/api/transactions", {
+      amount: 200,
+      type: "EXPENSE",
+      categoryId: expenseCatId,
+      date: DATE,
+      clientRequestId: CLIENT_KEY_2,
+    });
+    expect(resA.status).toBe(201);
+
+    const resB = await authPost(userB.token, "/api/transactions", {
+      amount: 300,
+      type: "EXPENSE",
+      categoryId: bExpenseCatId,
+      date: DATE,
+      clientRequestId: CLIENT_KEY_2, // Same key string used by User B
+    });
+    expect(resB.status).toBe(201);
+    expect(resB.body.data.id).not.toBe(resA.body.data.id);
+    expect(resB.body.data.amount).toBe("300.00");
+  });
+
+  it("400 — invalid clientRequestId UUID format is rejected", async () => {
+    const res = await authPost(userA.token, "/api/transactions", {
+      amount: 50,
+      type: "EXPENSE",
+      categoryId: expenseCatId,
+      date: DATE,
+      clientRequestId: "invalid-uuid-string",
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(res.body.message).toContain("Invalid clientRequestId UUID format");
+  });
+
+  it("201 — request without clientRequestId creates transaction normally", async () => {
+    const res = await authPost(userA.token, "/api/transactions", {
+      amount: 40,
+      type: "EXPENSE",
+      categoryId: expenseCatId,
+      date: DATE,
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.id).toBeDefined();
   });
 });
